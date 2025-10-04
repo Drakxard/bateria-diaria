@@ -22,6 +22,8 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
 
   const elapsedRef = useRef(0)
   const notificationShownRef = useRef(false)
+  const lastTickRef = useRef<number | null>(null)
+  const tickRef = useRef<((force?: boolean) => void) | null>(null)
 
   const totalSeconds = Math.max(1, timerMinutes * 60)
 
@@ -41,23 +43,43 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
       intervalRef.current = null
     }
 
+    tickRef.current = null
+    lastTickRef.current = null
+
     if (status === "running") {
       notificationShownRef.current = false
+      const effectiveSpeed = Math.max(1, speedMultiplier)
+      lastTickRef.current = performance.now()
 
-      const tick = () => {
-        const increment = Math.max(1, speedMultiplier)
-        const tentativeElapsed = elapsedRef.current + increment
+      const tick = (force = false) => {
+        const now = performance.now()
+        const lastTick = lastTickRef.current ?? now
+        let deltaSeconds = ((now - lastTick) / 1000) * effectiveSpeed
+
+        if (force && deltaSeconds < effectiveSpeed) {
+          deltaSeconds = effectiveSpeed
+        }
+
+        lastTickRef.current = now
+
+        const previousElapsed = elapsedRef.current
+        const tentativeElapsed = previousElapsed + deltaSeconds
         const nextElapsed = Math.min(totalSeconds, tentativeElapsed)
         const overshootSeconds = Math.max(tentativeElapsed - totalSeconds, 0)
 
-        elapsedRef.current = nextElapsed
-        setElapsedSeconds(nextElapsed)
+        if (nextElapsed !== previousElapsed) {
+          elapsedRef.current = nextElapsed
+          setElapsedSeconds(nextElapsed)
+        }
 
         if (nextElapsed >= totalSeconds) {
           if (intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
           }
+
+          tickRef.current = null
+          lastTickRef.current = null
 
           if ("Notification" in window && Notification.permission === "granted" && !notificationShownRef.current) {
             new Notification("Sesion completada", {
@@ -73,9 +95,13 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
         }
       }
 
-      intervalRef.current = setInterval(tick, 1000)
+      tickRef.current = tick
+
+      intervalRef.current = setInterval(() => tick(), 1000)
 
       if (elapsedRef.current === 0) {
+        tick(true)
+      } else {
         tick()
       }
 
@@ -84,6 +110,8 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
           clearInterval(intervalRef.current)
           intervalRef.current = null
         }
+        tickRef.current = null
+        lastTickRef.current = null
       }
     }
 
@@ -98,8 +126,24 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
+      tickRef.current = null
+      lastTickRef.current = null
     }
   }, [status, totalSeconds, onComplete, timerMinutes, speedMultiplier])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && tickRef.current) {
+        tickRef.current()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
 
   const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100)
   const circumference = 2 * Math.PI * 45
