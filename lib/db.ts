@@ -65,7 +65,7 @@ export async function updateSessionMinutes(dayIndex: number, minutes: number) {
 export async function updateDailyGoal(dayIndex: number, hours: number) {
   await sql`
     UPDATE sessions 
-    SET daily_goal_hours = ${hours},
+    SET daily_goal_hours = GREATEST(daily_goal_hours + ${hours}, 0),
         updated_at = CURRENT_TIMESTAMP
     WHERE day_index = ${dayIndex}
   `

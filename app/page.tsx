@@ -13,6 +13,8 @@ interface Session {
   day_index: number
   accumulated_minutes: number
   daily_goal_hours: number
+  created_at?: string
+  updated_at?: string
 }
 
 export default function Home() {
@@ -26,6 +28,8 @@ export default function Home() {
   const [timerMinutes, setTimerMinutes] = useState(30)
   const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
   const [excessMinutes, setExcessMinutes] = useState(0)
+  const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const FAST_ACCELERATION_SECONDS = 33
   const fetchRequestIdRef = useRef(0)
 
   const fetchSession = useCallback(async () => {
@@ -103,24 +107,48 @@ export default function Home() {
   const updateGoal = async (hours: number) => {
     if (!session) return
 
+    const parsedHours = Number.isFinite(hours) ? Math.floor(hours) : 0
+    const additionalHours = parsedHours > 0 ? parsedHours : 0
+
+    if (additionalHours === 0) {
+      return
+    }
+
+    const previousSession = session
+    const optimisticSession: Session = {
+      ...session,
+      daily_goal_hours: Number(session.daily_goal_hours) + additionalHours,
+      updated_at: new Date().toISOString(),
+    }
+
+    fetchRequestIdRef.current += 1
+    setSession(optimisticSession)
+
     try {
-      console.log("[v0] Updating goal to:", hours, "hours")
+      console.log("[v0] Adding goal hours:", additionalHours)
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "updateGoal",
           dayIndex: session.day_index,
-          hours,
+          hours: additionalHours,
         }),
       })
+
+      if (!res.ok) {
+        throw new Error(`Failed to update goal: ${res.status}`)
+      }
+
       const data = await res.json()
       console.log("[v0] Goal updated, new session:", data)
-      fetchRequestIdRef.current += 1
       setSession(data)
-      await fetchSession() // Force re-fetch to ensure UI updates with new goal
+      await fetchSession().catch((refetchError) => {
+        console.error("[v0] Error refetching session after goal update:", refetchError)
+      })
     } catch (error) {
       console.error("[v0] Error updating goal:", error)
+      setSession(previousSession)
     }
   }
 
@@ -165,6 +193,7 @@ export default function Home() {
       addSessionMinutes(timerMinutes)
     }
 
+    setSpeedMultiplier(1)
     setTimerStatus("idle")
   }
 
@@ -190,6 +219,7 @@ export default function Home() {
 
   const handleTimerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setSpeedMultiplier(1)
     setTimerStatus((prev) => (prev === "idle" ? "idle" : "paused"))
     setIsTimerConfigOpen(true)
     setTimerInput("")
@@ -198,12 +228,14 @@ export default function Home() {
   const handleTimerConfigConfirm = (minutes: number) => {
     setTimerMinutes(minutes)
     localStorage.setItem("timerMinutes", String(minutes))
+    setSpeedMultiplier(1)
     setTimerStatus("idle")
     setIsTimerConfigOpen(false)
     setTimerInput("")
   }
 
   const cancelTimer = useCallback(() => {
+    setSpeedMultiplier(1)
     setTimerStatus("idle")
   }, [])
 
@@ -211,6 +243,16 @@ export default function Home() {
     (e: KeyboardEvent) => {
       if (e.key === "d" || e.key === "D") {
         toggleDarkMode()
+        return
+      }
+
+      if (e.key === "ArrowDown") {
+        if (timerStatus === "running") {
+          e.preventDefault()
+          const totalSeconds = Math.max(1, timerMinutes * 60)
+          const fastMultiplier = Math.max(1, Math.ceil(totalSeconds / FAST_ACCELERATION_SECONDS))
+          setSpeedMultiplier(fastMultiplier)
+        }
         return
       }
 
@@ -276,13 +318,30 @@ export default function Home() {
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier],
   )
+
+  const handleKeyUp = useCallback((e: KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      setSpeedMultiplier(1)
+    }
+  }, [])
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [handleKeyPress])
+
+  useEffect(() => {
+    window.addEventListener("keyup", handleKeyUp)
+    return () => window.removeEventListener("keyup", handleKeyUp)
+  }, [handleKeyUp])
+
+  useEffect(() => {
+    if (timerStatus !== "running" && speedMultiplier !== 1) {
+      setSpeedMultiplier(1)
+    }
+  }, [timerStatus, speedMultiplier])
 
   const goalHours = session ? Number(session.daily_goal_hours) : 0
   const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
@@ -315,6 +374,7 @@ export default function Home() {
         timerMinutes={timerMinutes}
         onTimerClick={handleTimerClick}
         onCancel={cancelTimer}
+        speedMultiplier={speedMultiplier}
       />
 
       <GoalModal
@@ -330,6 +390,7 @@ export default function Home() {
           setGoalInput("")
         }}
         isDark={isDark}
+        currentGoalHours={goalHours}
       />
 
       <TimerConfigModal

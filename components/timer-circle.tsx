@@ -13,12 +13,13 @@ interface TimerCircleProps {
   timerMinutes: number
   onTimerClick: (e: React.MouseEvent) => void
   onCancel: () => void
+  speedMultiplier: number
 }
 
-export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerClick, onCancel }: TimerCircleProps) {
+export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerClick, onCancel, speedMultiplier }: TimerCircleProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const startRef = useRef<number | null>(null)
+
   const elapsedRef = useRef(0)
   const notificationShownRef = useRef(false)
 
@@ -41,16 +42,18 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
     }
 
     if (status === "running") {
-      const baseStart = Date.now() - elapsedRef.current * 1000
-      startRef.current = baseStart
       notificationShownRef.current = false
 
       const tick = () => {
-        const secondsElapsed = Math.floor((Date.now() - baseStart) / 1000)
+        const increment = Math.max(1, speedMultiplier)
+        const tentativeElapsed = elapsedRef.current + increment
+        const nextElapsed = Math.min(totalSeconds, tentativeElapsed)
+        const overshootSeconds = Math.max(tentativeElapsed - totalSeconds, 0)
 
-        if (secondsElapsed >= totalSeconds) {
-          setElapsedSeconds(totalSeconds)
+        elapsedRef.current = nextElapsed
+        setElapsedSeconds(nextElapsed)
 
+        if (nextElapsed >= totalSeconds) {
           if (intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
@@ -65,18 +68,16 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
             notificationShownRef.current = true
           }
 
-          const excessSeconds = secondsElapsed - totalSeconds
-          const excessMinutes = excessSeconds > 0 ? Math.floor(excessSeconds / 60) : 0
-          startRef.current = null
+          const excessMinutes = overshootSeconds > 0 ? Math.floor(overshootSeconds / 60) : 0
           onComplete(excessMinutes)
-          return
         }
-
-        setElapsedSeconds(secondsElapsed)
       }
 
-      tick()
       intervalRef.current = setInterval(tick, 1000)
+
+      if (elapsedRef.current === 0) {
+        tick()
+      }
 
       return () => {
         if (intervalRef.current) {
@@ -86,17 +87,9 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
       }
     }
 
-    if (status === "paused") {
-      if (startRef.current !== null) {
-        const pausedElapsed = Math.floor((Date.now() - startRef.current) / 1000)
-        setElapsedSeconds(pausedElapsed)
-        startRef.current = null
-      }
-    }
-
     if (status === "idle") {
       setElapsedSeconds(0)
-      startRef.current = null
+      elapsedRef.current = 0
       notificationShownRef.current = false
     }
 
@@ -106,13 +99,13 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
         intervalRef.current = null
       }
     }
-  }, [status, totalSeconds, onComplete, timerMinutes])
+  }, [status, totalSeconds, onComplete, timerMinutes, speedMultiplier])
 
   const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100)
   const circumference = 2 * Math.PI * 45
   const strokeDashoffset = circumference - (progress / 100) * circumference
 
-  const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+  const remainingSeconds = Math.max(0, Math.ceil(totalSeconds - elapsedSeconds))
   const minutes = Math.floor(remainingSeconds / 60)
   const seconds = remainingSeconds % 60
 
@@ -160,3 +153,4 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
     </div>
   )
 }
+
