@@ -29,7 +29,8 @@ export default function Home() {
   const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
   const [excessMinutes, setExcessMinutes] = useState(0)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
-  const FAST_ACCELERATION_SECONDS = 33
+  const [isFastForwarding, setIsFastForwarding] = useState(false)
+  const FAST_FORWARD_SECONDS = 3
   const fetchRequestIdRef = useRef(0)
 
   const fetchSession = useCallback(async () => {
@@ -185,6 +186,7 @@ export default function Home() {
 
   const handleTimerComplete = (excess: number) => {
     playAlarmSound()
+    setIsFastForwarding(false)
 
     if (excess > 0) {
       setExcessMinutes(excess)
@@ -220,6 +222,7 @@ export default function Home() {
   const handleTimerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     setSpeedMultiplier(1)
+    setIsFastForwarding(false)
     setTimerStatus((prev) => (prev === "idle" ? "idle" : "paused"))
     setIsTimerConfigOpen(true)
     setTimerInput("")
@@ -229,6 +232,7 @@ export default function Home() {
     setTimerMinutes(minutes)
     localStorage.setItem("timerMinutes", String(minutes))
     setSpeedMultiplier(1)
+    setIsFastForwarding(false)
     setTimerStatus("idle")
     setIsTimerConfigOpen(false)
     setTimerInput("")
@@ -236,6 +240,7 @@ export default function Home() {
 
   const cancelTimer = useCallback(() => {
     setSpeedMultiplier(1)
+    setIsFastForwarding(false)
     setTimerStatus("idle")
   }, [])
 
@@ -250,8 +255,9 @@ export default function Home() {
         if (timerStatus === "running") {
           e.preventDefault()
           const totalSeconds = Math.max(1, timerMinutes * 60)
-          const fastMultiplier = Math.max(1, Math.ceil(totalSeconds / FAST_ACCELERATION_SECONDS))
+          const fastMultiplier = Math.max(1, Math.ceil(totalSeconds / FAST_FORWARD_SECONDS))
           setSpeedMultiplier(fastMultiplier)
+          setIsFastForwarding(true)
         }
         return
       }
@@ -318,14 +324,14 @@ export default function Home() {
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier, setIsFastForwarding],
   )
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" && !isFastForwarding) {
       setSpeedMultiplier(1)
     }
-  }, [])
+  }, [isFastForwarding])
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyPress)
@@ -342,6 +348,12 @@ export default function Home() {
       setSpeedMultiplier(1)
     }
   }, [timerStatus, speedMultiplier])
+
+  useEffect(() => {
+    if (timerStatus !== "running" && isFastForwarding) {
+      setIsFastForwarding(false)
+    }
+  }, [timerStatus, isFastForwarding])
 
   const goalHours = session ? Number(session.daily_goal_hours) : 0
   const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
