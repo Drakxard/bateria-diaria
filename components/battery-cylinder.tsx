@@ -9,6 +9,8 @@ interface BatteryCylinderProps {
 }
 
 export function BatteryCylinder({ progress, isDark, accumulatedHours }: BatteryCylinderProps) {
+  console.log("[v0] BatteryCylinder render - accumulatedHours:", accumulatedHours, "progress:", progress)
+
   const fillColor = useMemo(() => {
     const lightGreen = { r: 134, g: 239, b: 172 } // #86efac
     const darkGreen = { r: 22, g: 163, b: 74 } // #16a34a

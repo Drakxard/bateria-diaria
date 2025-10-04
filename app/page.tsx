@@ -8,6 +8,7 @@ import { TimerCircle } from "@/components/timer-circle"
 import { GoalModal } from "@/components/goal-modal"
 import { TimerConfigModal } from "@/components/timer-config-modal"
 import { ExcessTimeModal } from "@/components/excess-time-modal"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Session {
   day_index: number
@@ -28,6 +29,8 @@ export default function Home() {
   const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
   const [excessMinutes, setExcessMinutes] = useState(0)
 
+  const isMobile = useIsMobile()
+
   useEffect(() => {
     fetchSession()
   }, [])
@@ -45,6 +48,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/session")
       const data = await res.json()
+      console.log("[v0] Fetched session:", data)
       setSession(data)
     } catch (error) {
       console.error("[v0] Error fetching session:", error)
@@ -65,6 +69,7 @@ export default function Home() {
         }),
       })
       const data = await res.json()
+      console.log("[v0] Added minutes, new session:", data)
       setSession(data)
     } catch (error) {
       console.error("[v0] Error adding minutes:", error)
@@ -75,6 +80,7 @@ export default function Home() {
     if (!session) return
 
     try {
+      console.log("[v0] Updating goal to:", hours, "hours")
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,7 +91,9 @@ export default function Home() {
         }),
       })
       const data = await res.json()
+      console.log("[v0] Goal updated, new session:", data)
       setSession(data)
+      await fetchSession() // Force re-fetch to ensure UI updates with new goal
     } catch (error) {
       console.error("[v0] Error updating goal:", error)
     }
@@ -183,6 +191,8 @@ export default function Home() {
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {
+      if (isMobile) return // Skip keyboard events on mobile
+
       if (e.key === "d" || e.key === "D") {
         toggleDarkMode()
         return
@@ -241,39 +251,55 @@ export default function Home() {
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, isTimerActive],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, isTimerActive, isMobile],
   )
 
   const handleBackgroundTouchStart = () => {
-    // Handle touch start logic here
+    if (!isMobile) return
+
+    const timer = setTimeout(() => {
+      setIsModalOpen(true)
+      setGoalInput("")
+    }, 800) // Long press for 800ms
+    setLongPressTimer(timer)
   }
 
   const handleBackgroundTouchEnd = () => {
-    // Handle touch end logic here
+    if (!isMobile) return
+
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+    }
   }
 
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyPress)
-    return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [handleKeyPress])
+    if (!isMobile) {
+      window.addEventListener("keydown", handleKeyPress)
+      return () => window.removeEventListener("keydown", handleKeyPress)
+    }
+  }, [handleKeyPress, isMobile])
 
   const progress = session ? Math.min(1, session.accumulated_minutes / (session.daily_goal_hours * 60)) : 0
   const accumulatedHours = session ? Math.floor(session.accumulated_minutes / 60) : 0
 
+  console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
+
   return (
     <main
       className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
-      onTouchStart={handleBackgroundTouchStart}
-      onTouchEnd={handleBackgroundTouchEnd}
-      onMouseDown={handleBackgroundTouchStart}
-      onMouseUp={handleBackgroundTouchEnd}
+      onTouchStart={isMobile ? handleBackgroundTouchStart : undefined}
+      onTouchEnd={isMobile ? handleBackgroundTouchEnd : undefined}
     >
-      <div className="fixed top-6 left-6 z-10 cursor-pointer select-none" onClick={toggleDarkMode}>
+      <div
+        className="fixed top-6 left-6 z-10 cursor-pointer select-none"
+        onClick={isMobile ? toggleDarkMode : undefined}
+      >
         <div className={`text-6xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session?.day_index || 1}</div>
         <div className={`text-sm text-center mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>día</div>
       </div>
 
-      <div className="h-screen w-full cursor-pointer" onClick={toggleTimer}>
+      <div className="h-screen w-full cursor-pointer" onClick={isMobile ? toggleTimer : undefined}>
         <BatteryCylinder progress={progress} isDark={isDark} accumulatedHours={accumulatedHours} />
       </div>
 
@@ -299,6 +325,8 @@ export default function Home() {
           setGoalInput("")
         }}
         isDark={isDark}
+        isMobile={isMobile}
+        onInputChange={setGoalInput}
       />
 
       <TimerConfigModal
