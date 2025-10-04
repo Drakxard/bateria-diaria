@@ -1,9 +1,13 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useState, useCallback } from "react"
 import { BatteryCylinder } from "@/components/battery-cylinder"
 import { TimerCircle } from "@/components/timer-circle"
 import { GoalModal } from "@/components/goal-modal"
+import { TimerConfigModal } from "@/components/timer-config-modal"
+import { ExcessTimeModal } from "@/components/excess-time-modal"
 
 interface Session {
   day_index: number
@@ -17,16 +21,24 @@ export default function Home() {
   const [isTimerActive, setIsTimerActive] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [goalInput, setGoalInput] = useState("")
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
+  const [isTimerConfigOpen, setIsTimerConfigOpen] = useState(false)
+  const [timerInput, setTimerInput] = useState("")
+  const [timerMinutes, setTimerMinutes] = useState(30)
+  const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
+  const [excessMinutes, setExcessMinutes] = useState(0)
 
-  // Load dark mode preference
+  useEffect(() => {
+    fetchSession()
+  }, [])
+
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode") === "true"
     setIsDark(savedDarkMode)
-  }, [])
-
-  // Fetch session data
-  useEffect(() => {
-    fetchSession()
+    const savedTimerMinutes = localStorage.getItem("timerMinutes")
+    if (savedTimerMinutes) {
+      setTimerMinutes(Number.parseInt(savedTimerMinutes))
+    }
   }, [])
 
   const fetchSession = async () => {
@@ -96,7 +108,6 @@ export default function Home() {
     oscillator.start(audioContext.currentTime)
     oscillator.stop(audioContext.currentTime + 0.5)
 
-    // Second note
     setTimeout(() => {
       const osc2 = audioContext.createOscillator()
       const gain2 = audioContext.createGain()
@@ -111,27 +122,78 @@ export default function Home() {
     }, 200)
   }
 
-  const handleTimerComplete = () => {
+  const handleTimerComplete = (excess: number) => {
     playAlarmSound()
-    addSessionMinutes(30)
+
+    if (excess > 0) {
+      setExcessMinutes(excess)
+      setIsExcessModalOpen(true)
+    } else {
+      addSessionMinutes(timerMinutes)
+    }
+
     setIsTimerActive(false)
+  }
+
+  const handleAcceptExcess = () => {
+    addSessionMinutes(timerMinutes + excessMinutes)
+    setIsExcessModalOpen(false)
+    setExcessMinutes(0)
+  }
+
+  const handleRejectExcess = () => {
+    addSessionMinutes(timerMinutes)
+    setIsExcessModalOpen(false)
+    setExcessMinutes(0)
+  }
+
+  const toggleDarkMode = () => {
+    setIsDark((prev) => {
+      const newValue = !prev
+      localStorage.setItem("darkMode", String(newValue))
+      return newValue
+    })
+  }
+
+  const toggleTimer = () => {
+    if (!isModalOpen && !isTimerConfigOpen) {
+      setIsTimerActive((prev) => !prev)
+    }
+  }
+
+  const handleTimerClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsTimerActive(false)
+    setIsTimerConfigOpen(true)
+    setTimerInput("")
+  }
+
+  const handleTimerConfigConfirm = (minutes: number) => {
+    setTimerMinutes(minutes)
+    localStorage.setItem("timerMinutes", String(minutes))
+    setIsTimerConfigOpen(false)
+    setTimerInput("")
+  }
+
+  const cancelTimer = () => {
+    setIsTimerActive(false)
+    localStorage.removeItem("timerStartTime")
+    localStorage.removeItem("timerDuration")
   }
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {
-      // Toggle dark mode
       if (e.key === "d" || e.key === "D") {
-        setIsDark((prev) => {
-          const newValue = !prev
-          localStorage.setItem("darkMode", String(newValue))
-          return newValue
-        })
+        toggleDarkMode()
         return
       }
 
-      // Start/pause timer
       if (e.key === " " || e.key === "Enter") {
-        if (!isModalOpen) {
+        if (isTimerConfigOpen && timerInput) {
+          e.preventDefault()
+          const minutes = Number.parseInt(timerInput) || 30
+          handleTimerConfigConfirm(minutes)
+        } else if (!isModalOpen && !isTimerConfigOpen) {
           e.preventDefault()
           setIsTimerActive((prev) => !prev)
         } else if (e.key === "Enter" && goalInput) {
@@ -144,9 +206,10 @@ export default function Home() {
         return
       }
 
-      // Number keys for goal modal
       if (e.key >= "0" && e.key <= "9") {
-        if (!isModalOpen) {
+        if (isTimerConfigOpen) {
+          setTimerInput((prev) => prev + e.key)
+        } else if (!isModalOpen) {
           setIsModalOpen(true)
           setGoalInput(e.key)
         } else {
@@ -155,20 +218,39 @@ export default function Home() {
         return
       }
 
-      if (e.key === "Backspace" && isModalOpen) {
-        e.preventDefault()
-        setGoalInput((prev) => prev.slice(0, -1))
+      if (e.key === "Backspace") {
+        if (isTimerConfigOpen) {
+          e.preventDefault()
+          setTimerInput((prev) => prev.slice(0, -1))
+        } else if (isModalOpen) {
+          e.preventDefault()
+          setGoalInput((prev) => prev.slice(0, -1))
+        }
         return
       }
 
-      // Escape to close modal
-      if (e.key === "Escape" && isModalOpen) {
-        setIsModalOpen(false)
-        setGoalInput("")
+      if (e.key === "Escape") {
+        if (isTimerActive) {
+          cancelTimer()
+        } else if (isTimerConfigOpen) {
+          setIsTimerConfigOpen(false)
+          setTimerInput("")
+        } else if (isModalOpen) {
+          setIsModalOpen(false)
+          setGoalInput("")
+        }
       }
     },
-    [isModalOpen, goalInput],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, isTimerActive],
   )
+
+  const handleBackgroundTouchStart = () => {
+    // Handle touch start logic here
+  }
+
+  const handleBackgroundTouchEnd = () => {
+    // Handle touch end logic here
+  }
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyPress)
@@ -176,23 +258,34 @@ export default function Home() {
   }, [handleKeyPress])
 
   const progress = session ? Math.min(1, session.accumulated_minutes / (session.daily_goal_hours * 60)) : 0
+  const accumulatedHours = session ? Math.floor(session.accumulated_minutes / 60) : 0
 
   return (
-    <main className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}>
-      <div className="fixed top-6 left-6 z-10">
+    <main
+      className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
+      onTouchStart={handleBackgroundTouchStart}
+      onTouchEnd={handleBackgroundTouchEnd}
+      onMouseDown={handleBackgroundTouchStart}
+      onMouseUp={handleBackgroundTouchEnd}
+    >
+      <div className="fixed top-6 left-6 z-10 cursor-pointer select-none" onClick={toggleDarkMode}>
         <div className={`text-6xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session?.day_index || 1}</div>
         <div className={`text-sm text-center mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>día</div>
       </div>
 
-      {/* Main cylinder */}
-      <div className="h-screen w-full">
-        <BatteryCylinder progress={progress} isDark={isDark} />
+      <div className="h-screen w-full cursor-pointer" onClick={toggleTimer}>
+        <BatteryCylinder progress={progress} isDark={isDark} accumulatedHours={accumulatedHours} />
       </div>
 
-      {/* Timer overlay */}
-      <TimerCircle isActive={isTimerActive} onComplete={handleTimerComplete} isDark={isDark} />
+      <TimerCircle
+        isActive={isTimerActive}
+        onComplete={handleTimerComplete}
+        isDark={isDark}
+        timerMinutes={timerMinutes}
+        onTimerClick={handleTimerClick}
+        onCancel={cancelTimer}
+      />
 
-      {/* Goal modal */}
       <GoalModal
         isOpen={isModalOpen}
         currentInput={goalInput}
@@ -205,6 +298,26 @@ export default function Home() {
           setIsModalOpen(false)
           setGoalInput("")
         }}
+        isDark={isDark}
+      />
+
+      <TimerConfigModal
+        isOpen={isTimerConfigOpen}
+        currentInput={timerInput}
+        onConfirm={handleTimerConfigConfirm}
+        onClose={() => {
+          setIsTimerConfigOpen(false)
+          setTimerInput("")
+        }}
+        isDark={isDark}
+      />
+
+      <ExcessTimeModal
+        isOpen={isExcessModalOpen}
+        excessMinutes={excessMinutes}
+        timerMinutes={timerMinutes}
+        onAccept={handleAcceptExcess}
+        onReject={handleRejectExcess}
         isDark={isDark}
       />
     </main>
