@@ -4,8 +4,10 @@ import type React from "react"
 
 import { useEffect, useState, useRef } from "react"
 
+type TimerStatus = "idle" | "running" | "paused"
+
 interface TimerCircleProps {
-  isActive: boolean
+  status: TimerStatus
   onComplete: (excessMinutes: number) => void
   isDark: boolean
   timerMinutes: number
@@ -13,13 +15,18 @@ interface TimerCircleProps {
   onCancel: () => void
 }
 
-export function TimerCircle({ isActive, onComplete, isDark, timerMinutes, onTimerClick, onCancel }: TimerCircleProps) {
-  const [startTime, setStartTime] = useState<number | null>(null)
+export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerClick, onCancel }: TimerCircleProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const startRef = useRef<number | null>(null)
+  const elapsedRef = useRef(0)
   const notificationShownRef = useRef(false)
 
-  const totalSeconds = timerMinutes * 60
+  const totalSeconds = Math.max(1, timerMinutes * 60)
+
+  useEffect(() => {
+    elapsedRef.current = elapsedSeconds
+  }, [elapsedSeconds])
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -28,78 +35,78 @@ export function TimerCircle({ isActive, onComplete, isDark, timerMinutes, onTime
   }, [])
 
   useEffect(() => {
-    if (isActive && !startTime) {
-      const now = Date.now()
-      setStartTime(now)
-      localStorage.setItem("timerStartTime", String(now))
-      localStorage.setItem("timerDuration", String(timerMinutes))
-      notificationShownRef.current = false
-    } else if (!isActive) {
-      setStartTime(null)
-      setElapsedSeconds(0)
-      localStorage.removeItem("timerStartTime")
-      localStorage.removeItem("timerDuration")
-      notificationShownRef.current = false
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
     }
-  }, [isActive, timerMinutes])
 
-  useEffect(() => {
-    const savedStartTime = localStorage.getItem("timerStartTime")
-    const savedDuration = localStorage.getItem("timerDuration")
+    if (status === "running") {
+      const baseStart = Date.now() - elapsedRef.current * 1000
+      startRef.current = baseStart
+      notificationShownRef.current = false
 
-    if (savedStartTime && savedDuration) {
-      const start = Number.parseInt(savedStartTime)
-      const duration = Number.parseInt(savedDuration)
-      const elapsed = Math.floor((Date.now() - start) / 1000)
+      const tick = () => {
+        const secondsElapsed = Math.floor((Date.now() - baseStart) / 1000)
 
-      if (elapsed < duration * 60) {
-        setStartTime(start)
-        setElapsedSeconds(elapsed)
-      } else {
-        const excess = elapsed - duration * 60
-        localStorage.removeItem("timerStartTime")
-        localStorage.removeItem("timerDuration")
-        onComplete(Math.floor(excess / 60))
+        if (secondsElapsed >= totalSeconds) {
+          setElapsedSeconds(totalSeconds)
+
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+
+          if ("Notification" in window && Notification.permission === "granted" && !notificationShownRef.current) {
+            new Notification("Sesion completada", {
+              body: `Has completado ${timerMinutes} minutos de trabajo`,
+              icon: "/favicon.ico",
+              tag: "timer-complete",
+            })
+            notificationShownRef.current = true
+          }
+
+          const excessSeconds = secondsElapsed - totalSeconds
+          const excessMinutes = excessSeconds > 0 ? Math.floor(excessSeconds / 60) : 0
+          startRef.current = null
+          onComplete(excessMinutes)
+          return
+        }
+
+        setElapsedSeconds(secondsElapsed)
       }
-    }
-  }, [])
 
-  useEffect(() => {
-    if (!startTime) return
+      tick()
+      intervalRef.current = setInterval(tick, 1000)
 
-    const updateElapsed = () => {
-      const now = Date.now()
-      const elapsed = Math.floor((now - startTime) / 1000)
-      setElapsedSeconds(elapsed)
-
-      if (elapsed >= totalSeconds) {
+      return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current)
+          intervalRef.current = null
         }
-
-        if ("Notification" in window && Notification.permission === "granted" && !notificationShownRef.current) {
-          new Notification("¡Sesión completada! 🎉", {
-            body: `Has completado ${timerMinutes} minutos de trabajo`,
-            icon: "/favicon.ico",
-            tag: "timer-complete",
-          })
-          notificationShownRef.current = true
-        }
-
-        const excess = elapsed - totalSeconds
-        onComplete(Math.floor(excess / 60))
       }
     }
 
-    updateElapsed()
-    intervalRef.current = setInterval(updateElapsed, 1000)
+    if (status === "paused") {
+      if (startRef.current !== null) {
+        const pausedElapsed = Math.floor((Date.now() - startRef.current) / 1000)
+        setElapsedSeconds(pausedElapsed)
+        startRef.current = null
+      }
+    }
+
+    if (status === "idle") {
+      setElapsedSeconds(0)
+      startRef.current = null
+      notificationShownRef.current = false
+    }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
+        intervalRef.current = null
       }
     }
-  }, [startTime, totalSeconds, onComplete, timerMinutes])
+  }, [status, totalSeconds, onComplete, timerMinutes])
 
   const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100)
   const circumference = 2 * Math.PI * 45
@@ -116,19 +123,19 @@ export function TimerCircle({ isActive, onComplete, isDark, timerMinutes, onTime
     }
   }
 
-  const handleTimerClick = (e: React.MouseEvent) => {
+  const handleInnerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onTimerClick(e)
   }
 
-  if (!isActive && !startTime && elapsedSeconds === 0) return null
+  if (status === "idle" && elapsedSeconds === 0) return null
 
   return (
     <div
       className="fixed inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="relative" onClick={handleTimerClick}>
+      <div className="relative" onClick={handleInnerClick}>
         <svg width="200" height="200" className="transform -rotate-90">
           <circle cx="100" cy="100" r="45" stroke={isDark ? "#374151" : "#e5e7eb"} strokeWidth="8" fill="none" />
           <circle

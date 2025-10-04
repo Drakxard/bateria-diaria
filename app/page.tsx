@@ -8,7 +8,6 @@ import { TimerCircle } from "@/components/timer-circle"
 import { GoalModal } from "@/components/goal-modal"
 import { TimerConfigModal } from "@/components/timer-config-modal"
 import { ExcessTimeModal } from "@/components/excess-time-modal"
-import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Session {
   day_index: number
@@ -19,10 +18,9 @@ interface Session {
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null)
   const [isDark, setIsDark] = useState(false)
-  const [isTimerActive, setIsTimerActive] = useState(false)
+  const [timerStatus, setTimerStatus] = useState<"idle" | "running" | "paused">("idle")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [goalInput, setGoalInput] = useState("")
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [isTimerConfigOpen, setIsTimerConfigOpen] = useState(false)
   const [timerInput, setTimerInput] = useState("")
   const [timerMinutes, setTimerMinutes] = useState(30)
@@ -30,7 +28,6 @@ export default function Home() {
   const [excessMinutes, setExcessMinutes] = useState(0)
   const fetchRequestIdRef = useRef(0)
 
-  const isMobile = useIsMobile()
   const fetchSession = useCallback(async () => {
     const requestId = ++fetchRequestIdRef.current
     try {
@@ -150,7 +147,7 @@ export default function Home() {
       addSessionMinutes(timerMinutes)
     }
 
-    setIsTimerActive(false)
+    setTimerStatus("idle")
   }
 
   const handleAcceptExcess = () => {
@@ -165,23 +162,17 @@ export default function Home() {
     setExcessMinutes(0)
   }
 
-  const toggleDarkMode = () => {
+  const toggleDarkMode = useCallback(() => {
     setIsDark((prev) => {
       const newValue = !prev
       localStorage.setItem("darkMode", String(newValue))
       return newValue
     })
-  }
-
-  const toggleTimer = () => {
-    if (!isModalOpen && !isTimerConfigOpen) {
-      setIsTimerActive((prev) => !prev)
-    }
-  }
+  }, [])
 
   const handleTimerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setIsTimerActive(false)
+    setTimerStatus((prev) => (prev === "idle" ? "idle" : "paused"))
     setIsTimerConfigOpen(true)
     setTimerInput("")
   }
@@ -189,39 +180,44 @@ export default function Home() {
   const handleTimerConfigConfirm = (minutes: number) => {
     setTimerMinutes(minutes)
     localStorage.setItem("timerMinutes", String(minutes))
+    setTimerStatus("idle")
     setIsTimerConfigOpen(false)
     setTimerInput("")
   }
 
-  const cancelTimer = () => {
-    setIsTimerActive(false)
-    localStorage.removeItem("timerStartTime")
-    localStorage.removeItem("timerDuration")
-  }
+  const cancelTimer = useCallback(() => {
+    setTimerStatus("idle")
+  }, [])
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {
-      if (isMobile) return // Skip keyboard events on mobile
-
       if (e.key === "d" || e.key === "D") {
         toggleDarkMode()
         return
       }
 
-      if (e.key === " " || e.key === "Enter") {
+      if (e.key === " ") {
+        if (!isModalOpen && !isTimerConfigOpen) {
+          e.preventDefault()
+          setTimerStatus((prev) => (prev === "running" ? "paused" : "running"))
+        }
+        return
+      }
+
+      if (e.key === "Enter") {
         if (isTimerConfigOpen && timerInput) {
           e.preventDefault()
           const minutes = Number.parseInt(timerInput) || 30
           handleTimerConfigConfirm(minutes)
-        } else if (!isModalOpen && !isTimerConfigOpen) {
-          e.preventDefault()
-          setIsTimerActive((prev) => !prev)
-        } else if (e.key === "Enter" && goalInput) {
+        } else if (isModalOpen && goalInput) {
           e.preventDefault()
           const hours = Number.parseInt(goalInput) || 1
           updateGoal(hours)
           setIsModalOpen(false)
           setGoalInput("")
+        } else if (!isModalOpen && !isTimerConfigOpen) {
+          e.preventDefault()
+          setTimerStatus("running")
         }
         return
       }
@@ -250,7 +246,7 @@ export default function Home() {
       }
 
       if (e.key === "Escape") {
-        if (isTimerActive) {
+        if (timerStatus !== "idle") {
           cancelTimer()
         } else if (isTimerConfigOpen) {
           setIsTimerConfigOpen(false)
@@ -261,36 +257,17 @@ export default function Home() {
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, isTimerActive, isMobile],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, cancelTimer, toggleDarkMode],
   )
 
-  const handleBackgroundTouchStart = () => {
-    if (!isMobile) return
-
-    const timer = setTimeout(() => {
-      setIsModalOpen(true)
-      setGoalInput("")
-    }, 800) // Long press for 800ms
-    setLongPressTimer(timer)
-  }
-
-  const handleBackgroundTouchEnd = () => {
-    if (!isMobile) return
-
-    if (longPressTimer) {
-      clearTimeout(longPressTimer)
-      setLongPressTimer(null)
-    }
-  }
-
   useEffect(() => {
-    if (!isMobile) {
-      window.addEventListener("keydown", handleKeyPress)
-      return () => window.removeEventListener("keydown", handleKeyPress)
-    }
-  }, [handleKeyPress, isMobile])
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [handleKeyPress])
 
-  const progress = session ? Math.min(1, session.accumulated_minutes / (session.daily_goal_hours * 60)) : 0
+  const goalHours = session ? session.daily_goal_hours : 0
+  const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
+  const progress = session && goalMinutes > 0 ? Math.min(1, session.accumulated_minutes / goalMinutes) : 0
   const accumulatedHours = session ? Math.floor(session.accumulated_minutes / 60) : 0
 
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
@@ -298,23 +275,20 @@ export default function Home() {
   return (
     <main
       className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
-      onTouchStart={isMobile ? handleBackgroundTouchStart : undefined}
-      onTouchEnd={isMobile ? handleBackgroundTouchEnd : undefined}
     >
       <div
-        className="fixed top-6 left-6 z-10 cursor-pointer select-none"
-        onClick={isMobile ? toggleDarkMode : undefined}
+        className="fixed top-6 left-6 z-10 select-none"
       >
         <div className={`text-6xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session?.day_index || 1}</div>
         <div className={`text-sm text-center mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>día</div>
       </div>
 
-      <div className="h-screen w-full cursor-pointer" onClick={isMobile ? toggleTimer : undefined}>
-        <BatteryCylinder progress={progress} isDark={isDark} accumulatedHours={accumulatedHours} />
+      <div className="h-screen w-full">
+        <BatteryCylinder progress={progress} isDark={isDark} goalHours={goalHours} />
       </div>
 
       <TimerCircle
-        isActive={isTimerActive}
+        status={timerStatus}
         onComplete={handleTimerComplete}
         isDark={isDark}
         timerMinutes={timerMinutes}
@@ -335,8 +309,6 @@ export default function Home() {
           setGoalInput("")
         }}
         isDark={isDark}
-        isMobile={isMobile}
-        onInputChange={setGoalInput}
       />
 
       <TimerConfigModal
