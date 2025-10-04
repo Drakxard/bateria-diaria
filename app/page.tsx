@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { BatteryCylinder } from "@/components/battery-cylinder"
 import { TimerCircle } from "@/components/timer-circle"
 import { GoalModal } from "@/components/goal-modal"
@@ -28,12 +28,13 @@ export default function Home() {
   const [timerMinutes, setTimerMinutes] = useState(30)
   const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
   const [excessMinutes, setExcessMinutes] = useState(0)
+  const fetchRequestIdRef = useRef(0)
 
   const isMobile = useIsMobile()
 
   useEffect(() => {
     fetchSession()
-  }, [])
+  }, [fetchSession])
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode") === "true"
@@ -44,16 +45,24 @@ export default function Home() {
     }
   }, [])
 
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async () => {
+    const requestId = ++fetchRequestIdRef.current
     try {
-      const res = await fetch("/api/session")
+      const res = await fetch("/api/session", { cache: "no-store" })
+      if (!res.ok) {
+        throw new Error(`Failed to fetch session: ${res.status}`)
+      }
       const data = await res.json()
-      console.log("[v0] Fetched session:", data)
-      setSession(data)
+      if (fetchRequestIdRef.current === requestId) {
+        console.log("[v0] Fetched session:", data)
+        setSession(data)
+      } else {
+        console.log("[v0] Ignored stale session response:", { requestId, latestRequestId: fetchRequestIdRef.current })
+      }
     } catch (error) {
       console.error("[v0] Error fetching session:", error)
     }
-  }
+  }, [])
 
   const addSessionMinutes = async (minutes: number) => {
     if (!session) return
@@ -70,6 +79,7 @@ export default function Home() {
       })
       const data = await res.json()
       console.log("[v0] Added minutes, new session:", data)
+      fetchRequestIdRef.current += 1
       setSession(data)
     } catch (error) {
       console.error("[v0] Error adding minutes:", error)
@@ -92,6 +102,7 @@ export default function Home() {
       })
       const data = await res.json()
       console.log("[v0] Goal updated, new session:", data)
+      fetchRequestIdRef.current += 1
       setSession(data)
       await fetchSession() // Force re-fetch to ensure UI updates with new goal
     } catch (error) {
