@@ -12,7 +12,12 @@ const formatRemainingTime = (minutes: number) => {
   const clamped = Math.max(minutes, 0)
   const hours = Math.floor(clamped / 60)
   const mins = clamped % 60
-  return `${hours}h ${mins}m`
+
+  if (hours > 0) {
+    return `${hours}h:${mins.toString().padStart(2, "0")}min`
+  }
+
+  return `${mins}min`
 }
 
 export function BatteryCylinder({ progress, isDark, remainingMinutes }: BatteryCylinderProps) {

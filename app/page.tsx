@@ -63,6 +63,16 @@ export default function Home() {
   const addSessionMinutes = async (minutes: number) => {
     if (!session) return
 
+    const previousSession = session
+    const optimisticSession: Session = {
+      ...session,
+      accumulated_minutes: Number(session.accumulated_minutes) + minutes,
+      updated_at: new Date().toISOString(),
+    }
+
+    fetchRequestIdRef.current += 1
+    setSession(optimisticSession)
+
     try {
       const res = await fetch("/api/session", {
         method: "POST",
@@ -73,12 +83,20 @@ export default function Home() {
           minutes,
         }),
       })
+
+      if (!res.ok) {
+        throw new Error(`Failed to add minutes: ${res.status}`)
+      }
+
       const data = await res.json()
       console.log("[v0] Added minutes, new session:", data)
-      fetchRequestIdRef.current += 1
       setSession(data)
+      await fetchSession().catch((refetchError) => {
+        console.error("[v0] Error refetching session after add:", refetchError)
+      })
     } catch (error) {
       console.error("[v0] Error adding minutes:", error)
+      setSession(previousSession)
     }
   }
 
@@ -266,11 +284,12 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [handleKeyPress])
 
-  const goalHours = session ? session.daily_goal_hours : 0
+  const goalHours = session ? Number(session.daily_goal_hours) : 0
   const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
-  const progress = session && goalMinutes > 0 ? Math.min(1, session.accumulated_minutes / goalMinutes) : 0
-  const accumulatedHours = session ? Math.floor(session.accumulated_minutes / 60) : 0
-  const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - (session?.accumulated_minutes ?? 0), 0) : 0
+  const accumulatedMinutes = session ? Number(session.accumulated_minutes) : 0
+  const progress = goalMinutes > 0 ? Math.min(1, accumulatedMinutes / goalMinutes) : 0
+  const accumulatedHours = Math.floor(accumulatedMinutes / 60)
+  const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - accumulatedMinutes, 0) : 0
 
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
 
