@@ -31,20 +31,6 @@ export default function Home() {
   const fetchRequestIdRef = useRef(0)
 
   const isMobile = useIsMobile()
-
-  useEffect(() => {
-    fetchSession()
-  }, [fetchSession])
-
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem("darkMode") === "true"
-    setIsDark(savedDarkMode)
-    const savedTimerMinutes = localStorage.getItem("timerMinutes")
-    if (savedTimerMinutes) {
-      setTimerMinutes(Number.parseInt(savedTimerMinutes))
-    }
-  }, [])
-
   const fetchSession = useCallback(async () => {
     const requestId = ++fetchRequestIdRef.current
     try {
@@ -61,6 +47,19 @@ export default function Home() {
       }
     } catch (error) {
       console.error("[v0] Error fetching session:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchSession()
+  }, [fetchSession])
+
+  useEffect(() => {
+    const savedDarkMode = localStorage.getItem("darkMode") === "true"
+    setIsDark(savedDarkMode)
+    const savedTimerMinutes = localStorage.getItem("timerMinutes")
+    if (savedTimerMinutes) {
+      setTimerMinutes(Number.parseInt(savedTimerMinutes))
     }
   }, [])
 
