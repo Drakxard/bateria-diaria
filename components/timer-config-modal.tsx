@@ -6,13 +6,15 @@ interface TimerConfigModalProps {
   onConfirm: (minutes: number) => void
   onClose: () => void
   isDark: boolean
+  fallbackMinutes: number
 }
 
-export function TimerConfigModal({ isOpen, currentInput, onConfirm, onClose, isDark }: TimerConfigModalProps) {
+export function TimerConfigModal({ isOpen, currentInput, onConfirm, onClose, isDark, fallbackMinutes }: TimerConfigModalProps) {
   if (!isOpen) return null
 
   const handleConfirm = () => {
-    const minutes = Number.parseInt(currentInput) || 30
+    const parsed = currentInput ? Number.parseInt(currentInput, 10) : Number.NaN
+    const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMinutes
     onConfirm(minutes)
   }
 
@@ -23,7 +25,7 @@ export function TimerConfigModal({ isOpen, currentInput, onConfirm, onClose, isD
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-bold mb-4 text-center">Minutos del temporizador</h2>
-        <div className="text-6xl font-bold text-center mb-6 text-green-500 min-w-[200px]">{currentInput || "30"}</div>
+        <div className="text-6xl font-bold text-center mb-6 text-green-500 min-w-[200px]">{currentInput || String(fallbackMinutes)}</div>
         <div className={`text-sm text-center mb-4 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
           Ingresa los minutos y presiona Enter
         </div>

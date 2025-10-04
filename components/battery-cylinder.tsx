@@ -5,11 +5,18 @@ import { useMemo } from "react"
 interface BatteryCylinderProps {
   progress: number // 0 to 1
   isDark: boolean
-  goalHours: number
+  remainingMinutes: number
 }
 
-export function BatteryCylinder({ progress, isDark, goalHours }: BatteryCylinderProps) {
-  console.log("[v0] BatteryCylinder render - goalHours:", goalHours, "progress:", progress)
+const formatRemainingTime = (minutes: number) => {
+  const clamped = Math.max(minutes, 0)
+  const hours = Math.floor(clamped / 60)
+  const mins = clamped % 60
+  return `${hours}h ${mins}m`
+}
+
+export function BatteryCylinder({ progress, isDark, remainingMinutes }: BatteryCylinderProps) {
+  console.log("[v0] BatteryCylinder render - remainingMinutes:", remainingMinutes, "progress:", progress)
 
   const fillColor = useMemo(() => {
     const lightGreen = { r: 134, g: 239, b: 172 } // #86efac
@@ -82,7 +89,7 @@ export function BatteryCylinder({ progress, isDark, goalHours }: BatteryCylinder
       </svg>
 
       <div className="absolute top-[10%] left-1/2 -translate-x-1/2">
-        <div className={`text-5xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{goalHours}h</div>
+        <div className={`text-5xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{formatRemainingTime(remainingMinutes)}</div>
       </div>
     </div>
   )

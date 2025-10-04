@@ -205,9 +205,10 @@ export default function Home() {
       }
 
       if (e.key === "Enter") {
-        if (isTimerConfigOpen && timerInput) {
+        if (isTimerConfigOpen) {
           e.preventDefault()
-          const minutes = Number.parseInt(timerInput) || 30
+          const parsed = timerInput ? Number.parseInt(timerInput, 10) : Number.NaN
+          const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : timerMinutes
           handleTimerConfigConfirm(minutes)
         } else if (isModalOpen && goalInput) {
           e.preventDefault()
@@ -215,7 +216,7 @@ export default function Home() {
           updateGoal(hours)
           setIsModalOpen(false)
           setGoalInput("")
-        } else if (!isModalOpen && !isTimerConfigOpen) {
+        } else if (!isModalOpen) {
           e.preventDefault()
           setTimerStatus("running")
         }
@@ -257,7 +258,7 @@ export default function Home() {
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, cancelTimer, toggleDarkMode],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode],
   )
 
   useEffect(() => {
@@ -269,6 +270,7 @@ export default function Home() {
   const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
   const progress = session && goalMinutes > 0 ? Math.min(1, session.accumulated_minutes / goalMinutes) : 0
   const accumulatedHours = session ? Math.floor(session.accumulated_minutes / 60) : 0
+  const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - (session?.accumulated_minutes ?? 0), 0) : 0
 
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
 
@@ -284,7 +286,7 @@ export default function Home() {
       </div>
 
       <div className="h-screen w-full">
-        <BatteryCylinder progress={progress} isDark={isDark} goalHours={goalHours} />
+        <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
       </div>
 
       <TimerCircle
@@ -314,6 +316,7 @@ export default function Home() {
       <TimerConfigModal
         isOpen={isTimerConfigOpen}
         currentInput={timerInput}
+        fallbackMinutes={timerMinutes}
         onConfirm={handleTimerConfigConfirm}
         onClose={() => {
           setIsTimerConfigOpen(false)
