@@ -49,10 +49,10 @@ export function TimerCircle({ status, onComplete, isDark, timerMinutes, onTimerC
     if (status === "running") {
       notificationShownRef.current = false
       const effectiveSpeed = Math.max(1, speedMultiplier)
-      lastTickRef.current = performance.now()
+      lastTickRef.current = Date.now()
 
       const tick = (force = false) => {
-        const now = performance.now()
+        const now = Date.now()
         const lastTick = lastTickRef.current ?? now
         let deltaSeconds = ((now - lastTick) / 1000) * effectiveSpeed
 
