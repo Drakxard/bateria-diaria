@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { BatteryCylinder } from "@/components/battery-cylinder"
 import { TimerCircle } from "@/components/timer-circle"
 import { GoalModal } from "@/components/goal-modal"
@@ -15,6 +15,21 @@ interface Session {
   daily_goal_hours: number
   created_at?: string
   updated_at?: string
+}
+
+const formatDuration = (minutes: number) => {
+  const safeMinutes = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(safeMinutes / 60)
+  const mins = safeMinutes % 60
+
+  if (hours > 0) {
+    if (mins === 0) {
+      return `${hours}h`
+    }
+    return `${hours}h ${mins}min`
+  }
+
+  return `${mins}min`
 }
 
 export default function Home() {
@@ -30,6 +45,7 @@ export default function Home() {
   const [excessMinutes, setExcessMinutes] = useState(0)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [isFastForwarding, setIsFastForwarding] = useState(false)
+  const [showSessionStacks, setShowSessionStacks] = useState(false)
   const FAST_FORWARD_SECONDS = 3
   const fetchRequestIdRef = useRef(0)
 
@@ -251,6 +267,12 @@ export default function Home() {
         return
       }
 
+      if (e.key === "c" || e.key === "C") {
+        e.preventDefault()
+        setShowSessionStacks((prev) => !prev)
+        return
+      }
+
       if (e.key === "ArrowDown") {
         if (timerStatus === "running") {
           e.preventDefault()
@@ -321,10 +343,12 @@ export default function Home() {
         } else if (isModalOpen) {
           setIsModalOpen(false)
           setGoalInput("")
+        } else if (showSessionStacks) {
+          setShowSessionStacks(false)
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier, setIsFastForwarding],
+    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier, setIsFastForwarding, showSessionStacks],
   )
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
@@ -362,6 +386,51 @@ export default function Home() {
   const accumulatedHours = Math.floor(accumulatedMinutes / 60)
   const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - accumulatedMinutes, 0) : 0
 
+  const sessionStacks = useMemo(() => {
+    if (accumulatedMinutes <= 0) {
+      return [] as Array<{ id: string; progress: number; label: string; title: string; minutes: number }>
+    }
+
+    const interval = Math.max(1, timerMinutes)
+    const totalMinutes = Math.max(0, accumulatedMinutes)
+    const fullStacks = Math.floor(totalMinutes / interval)
+    const remainder = totalMinutes % interval
+    const stacks: Array<{ id: string; progress: number; label: string; title: string; minutes: number }> = []
+
+    for (let index = 0; index < fullStacks; index += 1) {
+      stacks.push({
+        id: `stack-${index}`,
+        progress: 1,
+        label: formatDuration(interval),
+        title: `A${index + 1}`,
+        minutes: interval,
+      })
+    }
+
+    if (remainder > 0) {
+      stacks.push({
+        id: `stack-${stacks.length}`,
+        progress: remainder / interval,
+        label: formatDuration(remainder),
+        title: `A${stacks.length + 1}`,
+        minutes: remainder,
+      })
+    }
+
+    return stacks
+  }, [accumulatedMinutes, timerMinutes])
+
+  const sessionEquation = useMemo(() => {
+    if (sessionStacks.length === 0) {
+      return ""
+    }
+
+    return `${sessionStacks.map((stack) => stack.title).join(" + ")} = Total de hoy`
+  }, [sessionStacks])
+
+  const totalDurationLabel = formatDuration(accumulatedMinutes)
+
+
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
 
   return (
@@ -388,6 +457,40 @@ export default function Home() {
         onCancel={cancelTimer}
         speedMultiplier={speedMultiplier}
       />
+
+      {showSessionStacks && (
+        <div className="fixed inset-x-0 bottom-0 z-40 px-6 pb-10 pt-6 bg-gradient-to-t from-black/70 via-black/40 to-transparent">
+          {sessionStacks.length > 0 ? (
+            <>
+              <div className="text-center text-white text-lg font-semibold">{sessionEquation}</div>
+              <div className="mt-6 flex flex-wrap justify-center gap-6 max-h-[60vh] overflow-y-auto">
+                {sessionStacks.map((stack) => (
+                  <div key={stack.id} className="flex flex-col items-center gap-2">
+                    <div className="w-[200px] h-[400px]">
+                      <BatteryCylinder
+                        progress={stack.progress}
+                        isDark={isDark}
+                        remainingMinutes={0}
+                        labelOverride={stack.label}
+                      />
+                    </div>
+                    <span className="text-white font-medium">{stack.title}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 flex flex-col items-center gap-2 text-white">
+                <div className="w-[200px] h-[400px]">
+                  <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
+                </div>
+                <span className="font-semibold">Total de hoy: {totalDurationLabel}</span>
+              </div>
+              <p className="mt-4 text-sm text-white/80">Presiona otra vez "c" o usa Escape para cerrar.</p>
+            </>
+          ) : (
+            <div className="text-center text-white font-semibold">Todavia no registras sesiones hoy.</div>
+          )}
+        </div>
+      )}
 
       <GoalModal
         isOpen={isModalOpen}
