@@ -462,7 +462,7 @@ export default function Home() {
                       isDark={isDark}
                       remainingMinutes={0}
                       labelOverride={stack.label}
-                      labelTopClass="top-[6%]"
+                      labelTopClass="top-[4%]"
                     />
                   </div>
                   {index < sessionStacks.length - 1 && (
@@ -477,7 +477,7 @@ export default function Home() {
                   isDark={isDark}
                   remainingMinutes={remainingMinutes}
                   labelOverride={totalDurationLabel}
-                  labelTopClass="top-[6%]"
+                  labelTopClass="top-[4%]"
                 />
               </div>
             </div>
