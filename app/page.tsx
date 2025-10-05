@@ -388,21 +388,20 @@ export default function Home() {
 
   const sessionStacks = useMemo(() => {
     if (accumulatedMinutes <= 0) {
-      return [] as Array<{ id: string; progress: number; label: string; title: string; minutes: number }>
+      return [] as Array<{ id: string; progress: number; label: string; minutes: number }>
     }
 
     const interval = Math.max(1, timerMinutes)
     const totalMinutes = Math.max(0, accumulatedMinutes)
     const fullStacks = Math.floor(totalMinutes / interval)
     const remainder = totalMinutes % interval
-    const stacks: Array<{ id: string; progress: number; label: string; title: string; minutes: number }> = []
+    const stacks: Array<{ id: string; progress: number; label: string; minutes: number }> = []
 
     for (let index = 0; index < fullStacks; index += 1) {
       stacks.push({
         id: `stack-${index}`,
         progress: 1,
         label: formatDuration(interval),
-        title: `A${index + 1}`,
         minutes: interval,
       })
     }
@@ -412,7 +411,6 @@ export default function Home() {
         id: `stack-${stacks.length}`,
         progress: remainder / interval,
         label: formatDuration(remainder),
-        title: `A${stacks.length + 1}`,
         minutes: remainder,
       })
     }
@@ -420,16 +418,9 @@ export default function Home() {
     return stacks
   }, [accumulatedMinutes, timerMinutes])
 
-  const sessionEquation = useMemo(() => {
-    if (sessionStacks.length === 0) {
-      return ""
-    }
-
-    return `${sessionStacks.map((stack) => stack.title).join(" + ")} = Ctotal`
-  }, [sessionStacks])
-
   const totalDurationLabel = formatDuration(accumulatedMinutes)
-  const totalBatteryTitle = "Ctotal"
+  const overlayBackground = isDark ? "bg-gray-900/95" : "bg-white/95"
+  const overlayAccentText = isDark ? "text-white" : "text-gray-900"
 
 
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
@@ -460,47 +451,39 @@ export default function Home() {
       />
 
       {showSessionStacks && (
-        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-10 bg-gray-900/95 px-8 py-12 backdrop-blur-md">
+        <div className={`fixed inset-0 z-40 flex flex-col items-center justify-center gap-10 px-8 py-12 backdrop-blur-md ${overlayBackground}`}>
           {sessionStacks.length > 0 ? (
-            <>
-              <div className="text-center text-white text-xl font-semibold">{sessionEquation}</div>
-              <div className="flex w-full items-end justify-center gap-6 overflow-x-auto pb-4">
-                {sessionStacks.map((stack, index) => (
-                  <div key={stack.id} className="flex items-end gap-4">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="h-[400px] w-[200px]">
-                        <BatteryCylinder
-                          progress={stack.progress}
-                          isDark={true}
-                          remainingMinutes={0}
-                          labelOverride={stack.label}
-                        />
-                      </div>
-                      <span className="text-white font-medium">{stack.title}</span>
-                    </div>
-                    {index < sessionStacks.length - 1 && (
-                      <span className="text-white text-4xl font-semibold self-center">+</span>
-                    )}
-                  </div>
-                ))}
-                <span className="text-white text-4xl font-semibold self-center">=</span>
-                <div className="flex flex-col items-center gap-3">
+            <div className="flex w-full items-end justify-center gap-6 overflow-x-auto pb-4">
+              {sessionStacks.map((stack, index) => (
+                <div key={stack.id} className="flex items-end gap-4">
                   <div className="h-[400px] w-[200px]">
                     <BatteryCylinder
-                      progress={progress}
-                      isDark={true}
-                      remainingMinutes={remainingMinutes}
-                      labelOverride={totalDurationLabel}
+                      progress={stack.progress}
+                      isDark={isDark}
+                      remainingMinutes={0}
+                      labelOverride={stack.label}
+                      labelTopClass="top-[6%]"
                     />
                   </div>
-                  <span className="text-white font-semibold">{totalBatteryTitle}</span>
+                  {index < sessionStacks.length - 1 && (
+                    <span className={`${overlayAccentText} text-4xl font-semibold self-center`}>+</span>
+                  )}
                 </div>
+              ))}
+              <span className={`${overlayAccentText} text-4xl font-semibold self-center`}>=</span>
+              <div className="h-[400px] w-[200px]">
+                <BatteryCylinder
+                  progress={progress}
+                  isDark={isDark}
+                  remainingMinutes={remainingMinutes}
+                  labelOverride={totalDurationLabel}
+                  labelTopClass="top-[6%]"
+                />
               </div>
-            </>
+            </div>
           ) : (
-            <div className="text-center text-white font-semibold">Todavia no registras sesiones hoy.</div>
+            <div className={`text-center font-semibold ${overlayAccentText}`}>Todavia no registras sesiones hoy.</div>
           )}
-          <p className="text-sm text-white/80">Presiona otra vez "c" o usa Escape para cerrar.</p>
         </div>
       )}
 

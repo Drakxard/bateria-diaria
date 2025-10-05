@@ -7,6 +7,7 @@ interface BatteryCylinderProps {
   isDark: boolean
   remainingMinutes: number
   labelOverride?: string
+  labelTopClass?: string
 }
 
 const formatRemainingTime = (minutes: number) => {
@@ -21,10 +22,11 @@ const formatRemainingTime = (minutes: number) => {
   return `${mins}min`
 }
 
-export function BatteryCylinder({ progress, isDark, remainingMinutes, labelOverride }: BatteryCylinderProps) {
+export function BatteryCylinder({ progress, isDark, remainingMinutes, labelOverride, labelTopClass }: BatteryCylinderProps) {
   console.log("[v0] BatteryCylinder render - remainingMinutes:", remainingMinutes, "progress:", progress)
 
   const displayText = labelOverride ?? formatRemainingTime(remainingMinutes)
+  const labelPositionClass = labelTopClass ?? "top-[10%]"
 
   const fillColor = useMemo(() => {
     const lightGreen = { r: 134, g: 239, b: 172 } // #86efac
@@ -96,7 +98,8 @@ export function BatteryCylinder({ progress, isDark, remainingMinutes, labelOverr
         </g>
       </svg>
 
-      <div className="absolute top-[10%] left-1/2 -translate-x-1/2">
+      {/* Time label */}
+      <div className={`absolute ${labelPositionClass} left-1/2 -translate-x-1/2`}>
         <div className={`text-5xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{displayText}</div>
       </div>
     </div>
