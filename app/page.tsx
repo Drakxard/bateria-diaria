@@ -26,7 +26,7 @@ const formatDuration = (minutes: number) => {
     if (mins === 0) {
       return `${hours}h`
     }
-    return `${hours}h ${mins}min`
+    return `${hours}h:${mins.toString().padStart(2, "0")}min`
   }
 
   return `${mins}min`
@@ -425,10 +425,11 @@ export default function Home() {
       return ""
     }
 
-    return `${sessionStacks.map((stack) => stack.title).join(" + ")} = Total de hoy`
+    return `${sessionStacks.map((stack) => stack.title).join(" + ")} = Ctotal`
   }, [sessionStacks])
 
   const totalDurationLabel = formatDuration(accumulatedMinutes)
+  const totalBatteryTitle = "Ctotal"
 
 
   console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
@@ -459,36 +460,47 @@ export default function Home() {
       />
 
       {showSessionStacks && (
-        <div className="fixed inset-x-0 bottom-0 z-40 px-6 pb-10 pt-6 bg-gradient-to-t from-black/70 via-black/40 to-transparent">
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-10 bg-gray-900/95 px-8 py-12 backdrop-blur-md">
           {sessionStacks.length > 0 ? (
             <>
-              <div className="text-center text-white text-lg font-semibold">{sessionEquation}</div>
-              <div className="mt-6 flex flex-wrap justify-center gap-6 max-h-[60vh] overflow-y-auto">
-                {sessionStacks.map((stack) => (
-                  <div key={stack.id} className="flex flex-col items-center gap-2">
-                    <div className="w-[200px] h-[400px]">
-                      <BatteryCylinder
-                        progress={stack.progress}
-                        isDark={isDark}
-                        remainingMinutes={0}
-                        labelOverride={stack.label}
-                      />
+              <div className="text-center text-white text-xl font-semibold">{sessionEquation}</div>
+              <div className="flex w-full items-end justify-center gap-6 overflow-x-auto pb-4">
+                {sessionStacks.map((stack, index) => (
+                  <div key={stack.id} className="flex items-end gap-4">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="h-[400px] w-[200px]">
+                        <BatteryCylinder
+                          progress={stack.progress}
+                          isDark={true}
+                          remainingMinutes={0}
+                          labelOverride={stack.label}
+                        />
+                      </div>
+                      <span className="text-white font-medium">{stack.title}</span>
                     </div>
-                    <span className="text-white font-medium">{stack.title}</span>
+                    {index < sessionStacks.length - 1 && (
+                      <span className="text-white text-4xl font-semibold self-center">+</span>
+                    )}
                   </div>
                 ))}
-              </div>
-              <div className="mt-8 flex flex-col items-center gap-2 text-white">
-                <div className="w-[200px] h-[400px]">
-                  <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
+                <span className="text-white text-4xl font-semibold self-center">=</span>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-[400px] w-[200px]">
+                    <BatteryCylinder
+                      progress={progress}
+                      isDark={true}
+                      remainingMinutes={remainingMinutes}
+                      labelOverride={totalDurationLabel}
+                    />
+                  </div>
+                  <span className="text-white font-semibold">{totalBatteryTitle}</span>
                 </div>
-                <span className="font-semibold">Total de hoy: {totalDurationLabel}</span>
               </div>
-              <p className="mt-4 text-sm text-white/80">Presiona otra vez "c" o usa Escape para cerrar.</p>
             </>
           ) : (
             <div className="text-center text-white font-semibold">Todavia no registras sesiones hoy.</div>
           )}
+          <p className="text-sm text-white/80">Presiona otra vez "c" o usa Escape para cerrar.</p>
         </div>
       )}
 
