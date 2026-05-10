@@ -2,20 +2,34 @@
 
 import type React from "react"
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react"
-import { BatteryCylinder } from "@/components/battery-cylinder"
-import { TimerCircle } from "@/components/timer-circle"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { GoalModal } from "@/components/goal-modal"
+import { TimerCircle } from "@/components/timer-circle"
 import { TimerConfigModal } from "@/components/timer-config-modal"
 import { ExcessTimeModal } from "@/components/excess-time-modal"
+import { BatteryCylinder } from "@/components/battery-cylinder"
+import { PastedImageStage } from "@/components/pasted-image-stage"
+import {
+  DEFAULT_IMAGE_TRANSFORM,
+  DEFAULT_SESSION_STATE,
+  canReuseDirectoryHandle,
+  getTodayStamp,
+  loadImageFromDirectory,
+  loadSessionState,
+  normalizeImageTransform,
+  normalizeSessionState,
+  persistDirectoryHandle,
+  requestDirectoryAccess,
+  restoreDirectoryHandle,
+  saveImageToDirectory,
+  saveImageTransform,
+  saveSessionState,
+  type ImageAssetState,
+  type ImageTransformState,
+  type LocalSessionState,
+} from "@/lib/local-app-state"
 
-interface Session {
-  day_index: number
-  accumulated_minutes: number
-  daily_goal_hours: number
-  created_at?: string
-  updated_at?: string
-}
+const FAST_FORWARD_SECONDS = 3
 
 const formatDuration = (minutes: number) => {
   const safeMinutes = Math.max(0, Math.round(minutes))
@@ -32,142 +46,274 @@ const formatDuration = (minutes: number) => {
   return `${mins}min`
 }
 
+function FolderGate({ isDark, fsSupported, isConnecting, onSelect }: { isDark: boolean; fsSupported: boolean; isConnecting: boolean; onSelect: () => void }) {
+  return (
+    <main className={`flex min-h-screen items-center justify-center px-6 py-10 ${isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-950"}`}>
+      <div className={`w-full max-w-xl rounded-[2rem] border p-8 shadow-2xl ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"}`}>
+        <div className="space-y-4">
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-500">Modo local</div>
+          <h1 className="text-4xl font-bold">Conecta una carpeta antes de usar la app</h1>
+          <p className={`text-base leading-7 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+            La imagen pegada y su ajuste se guardaran en una carpeta local. Esta version funciona solo en navegadores Chromium con File System Access API.
+          </p>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-4">
+          <button
+            type="button"
+            onClick={onSelect}
+            disabled={!fsSupported || isConnecting}
+            className={`rounded-full px-6 py-4 text-lg font-semibold transition ${
+              !fsSupported || isConnecting
+                ? "cursor-not-allowed bg-gray-400 text-white"
+                : "bg-emerald-500 text-white hover:bg-emerald-600"
+            }`}
+          >
+            {isConnecting ? "Conectando..." : "Elegir carpeta"}
+          </button>
+
+          {!fsSupported && (
+            <div className={`rounded-2xl px-4 py-3 text-sm ${isDark ? "bg-red-500/10 text-red-200" : "bg-red-50 text-red-700"}`}>
+              Este navegador no soporta la API requerida. Usa Chrome o Edge actualizados.
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  )
+}
+
 export default function Home() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [isDark, setIsDark] = useState(false)
+  const [session, setSession] = useState<LocalSessionState>(DEFAULT_SESSION_STATE)
   const [timerStatus, setTimerStatus] = useState<"idle" | "running" | "paused">("idle")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [goalInput, setGoalInput] = useState("")
   const [isTimerConfigOpen, setIsTimerConfigOpen] = useState(false)
   const [timerInput, setTimerInput] = useState("")
-  const [timerMinutes, setTimerMinutes] = useState(30)
   const [isExcessModalOpen, setIsExcessModalOpen] = useState(false)
   const [excessMinutes, setExcessMinutes] = useState(0)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [isFastForwarding, setIsFastForwarding] = useState(false)
   const [showSessionStacks, setShowSessionStacks] = useState(false)
-  const FAST_FORWARD_SECONDS = 3
-  const fetchRequestIdRef = useRef(0)
+  const [isImageSelected, setIsImageSelected] = useState(false)
+  const [imageAsset, setImageAsset] = useState<ImageAssetState | null>(null)
+  const [imageTransform, setImageTransform] = useState<ImageTransformState>(DEFAULT_IMAGE_TRANSFORM)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [isConnectingDirectory, setIsConnectingDirectory] = useState(false)
+  const [isFsSupported, setIsFsSupported] = useState(true)
+  const imageUrlRef = useRef<string | null>(null)
 
-  const fetchSession = useCallback(async () => {
-    const requestId = ++fetchRequestIdRef.current
-    try {
-      const res = await fetch("/api/session", { cache: "no-store" })
-      if (!res.ok) {
-        throw new Error(`Failed to fetch session: ${res.status}`)
+  const isDark = session.darkMode
+
+  const updateSession = useCallback((updater: (current: LocalSessionState) => LocalSessionState) => {
+    setSession((current) => {
+      const next = normalizeSessionState(updater(normalizeSessionState(current)))
+      saveSessionState(next)
+      return next
+    })
+  }, [])
+
+  const replaceImageFile = useCallback((file: File, asset: ImageAssetState, transform: ImageTransformState) => {
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current)
+    }
+
+    const nextUrl = URL.createObjectURL(file)
+    imageUrlRef.current = nextUrl
+    setImageUrl(nextUrl)
+    setImageAsset(asset)
+    setImageTransform(normalizeImageTransform(transform))
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current)
       }
-      const data = await res.json()
-      if (fetchRequestIdRef.current === requestId) {
-        console.log("[v0] Fetched session:", data)
-        setSession(data)
-      } else {
-        console.log("[v0] Ignored stale session response:", { requestId, latestRequestId: fetchRequestIdRef.current })
-      }
-    } catch (error) {
-      console.error("[v0] Error fetching session:", error)
     }
   }, [])
 
   useEffect(() => {
-    fetchSession()
-  }, [fetchSession])
+    let cancelled = false
 
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem("darkMode") === "true"
-    setIsDark(savedDarkMode)
-    const savedTimerMinutes = localStorage.getItem("timerMinutes")
-    if (savedTimerMinutes) {
-      setTimerMinutes(Number.parseInt(savedTimerMinutes))
-    }
-  }, [])
-
-  const addSessionMinutes = async (minutes: number) => {
-    if (!session) return
-
-    const previousSession = session
-    const optimisticSession: Session = {
-      ...session,
-      accumulated_minutes: Number(session.accumulated_minutes) + minutes,
-      updated_at: new Date().toISOString(),
-    }
-
-    fetchRequestIdRef.current += 1
-    setSession(optimisticSession)
-
-    try {
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "addMinutes",
-          dayIndex: session.day_index,
-          minutes,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Failed to add minutes: ${res.status}`)
+    const hydrate = async () => {
+      const initialState = loadSessionState()
+      if (!cancelled) {
+        setSession(initialState)
+        setIsFsSupported(typeof window.showDirectoryPicker === "function")
       }
 
-      const data = await res.json()
-      console.log("[v0] Added minutes, new session:", data)
-      setSession(data)
-      await fetchSession().catch((refetchError) => {
-        console.error("[v0] Error refetching session after add:", refetchError)
-      })
-    } catch (error) {
-      console.error("[v0] Error adding minutes:", error)
-      setSession(previousSession)
+      if (typeof window.showDirectoryPicker !== "function") {
+        if (!cancelled) {
+          setIsHydrated(true)
+        }
+        return
+      }
+
+      const restoredHandle = await restoreDirectoryHandle()
+      if (cancelled) {
+        return
+      }
+
+      if (restoredHandle && (await canReuseDirectoryHandle(restoredHandle))) {
+        setDirectoryHandle(restoredHandle)
+        const loadedImage = await loadImageFromDirectory(restoredHandle)
+        if (!cancelled && loadedImage) {
+          replaceImageFile(loadedImage.file, loadedImage.asset, loadedImage.transform)
+        }
+      }
+
+      if (!cancelled) {
+        setIsHydrated(true)
+      }
     }
-  }
 
-  const updateGoal = async (hours: number) => {
-    if (!session) return
+    hydrate().catch(() => {
+      if (!cancelled) {
+        setIsHydrated(true)
+      }
+    })
 
-    const parsedHours = Number.isFinite(hours) ? Math.floor(hours) : 0
-    const additionalHours = parsedHours > 0 ? parsedHours : 0
+    return () => {
+      cancelled = true
+    }
+  }, [replaceImageFile])
 
-    if (additionalHours === 0) {
+  useEffect(() => {
+    if (!isHydrated) {
       return
     }
 
-    const previousSession = session
-    const optimisticSession: Session = {
-      ...session,
-      daily_goal_hours: Number(session.daily_goal_hours) + additionalHours,
-      updated_at: new Date().toISOString(),
-    }
-
-    fetchRequestIdRef.current += 1
-    setSession(optimisticSession)
-
-    try {
-      console.log("[v0] Adding goal hours:", additionalHours)
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "updateGoal",
-          dayIndex: session.day_index,
-          hours: additionalHours,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Failed to update goal: ${res.status}`)
+    updateSession((current) => {
+      if (current.lastActiveDate === getTodayStamp()) {
+        return current
       }
 
-      const data = await res.json()
-      console.log("[v0] Goal updated, new session:", data)
-      setSession(data)
-      await fetchSession().catch((refetchError) => {
-        console.error("[v0] Error refetching session after goal update:", refetchError)
-      })
-    } catch (error) {
-      console.error("[v0] Error updating goal:", error)
-      setSession(previousSession)
+      return {
+        ...current,
+        accumulatedMinutes: 0,
+        lastActiveDate: getTodayStamp(),
+      }
+    })
+  }, [isHydrated, updateSession])
+
+  useEffect(() => {
+    if (!directoryHandle || !imageAsset) {
+      return
     }
-  }
+
+    const timeoutId = window.setTimeout(() => {
+      saveImageTransform(directoryHandle, imageAsset, imageTransform).catch((error) => {
+        console.error("[local] Failed to persist image transform:", error)
+      })
+    }, 150)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [directoryHandle, imageAsset, imageTransform])
+
+  const handleDirectorySelection = useCallback(async () => {
+    if (typeof window.showDirectoryPicker !== "function") {
+      setIsFsSupported(false)
+      return
+    }
+
+    setIsConnectingDirectory(true)
+
+    try {
+      const handle = await window.showDirectoryPicker()
+      const granted = await requestDirectoryAccess(handle)
+
+      if (!granted) {
+        return
+      }
+
+      await persistDirectoryHandle(handle)
+      setDirectoryHandle(handle)
+
+      const loadedImage = await loadImageFromDirectory(handle)
+      if (loadedImage) {
+        replaceImageFile(loadedImage.file, loadedImage.asset, loadedImage.transform)
+      } else {
+        setImageAsset(null)
+        setImageTransform(DEFAULT_IMAGE_TRANSFORM)
+        setImageUrl((current) => {
+          if (current) {
+            URL.revokeObjectURL(current)
+          }
+          imageUrlRef.current = null
+          return null
+        })
+      }
+    } catch (error) {
+      console.error("[local] Directory selection failed:", error)
+    } finally {
+      setIsConnectingDirectory(false)
+      setIsHydrated(true)
+    }
+  }, [replaceImageFile])
+
+  const goalHours = session.dailyGoalHours
+  const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
+  const accumulatedMinutes = session.accumulatedMinutes
+  const progress = goalMinutes > 0 ? Math.min(1, accumulatedMinutes / goalMinutes) : 0
+  const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - accumulatedMinutes, 0) : 0
+
+  const sessionStacks = useMemo(() => {
+    if (accumulatedMinutes <= 0) {
+      return [] as Array<{ id: string; progress: number; label: string }>
+    }
+
+    const interval = Math.max(1, session.timerMinutes)
+    const fullStacks = Math.floor(accumulatedMinutes / interval)
+    const remainder = accumulatedMinutes % interval
+    const stacks: Array<{ id: string; progress: number; label: string }> = []
+
+    for (let index = 0; index < fullStacks; index += 1) {
+      stacks.push({
+        id: `stack-${index}`,
+        progress: 1,
+        label: formatDuration(interval),
+      })
+    }
+
+    if (remainder > 0) {
+      stacks.push({
+        id: `stack-${stacks.length}`,
+        progress: remainder / interval,
+        label: formatDuration(remainder),
+      })
+    }
+
+    return stacks
+  }, [accumulatedMinutes, session.timerMinutes])
+
+  const addSessionMinutes = useCallback(
+    (minutes: number) => {
+      updateSession((current) => ({
+        ...current,
+        accumulatedMinutes: current.accumulatedMinutes + Math.max(0, minutes),
+        lastActiveDate: getTodayStamp(),
+      }))
+    },
+    [updateSession],
+  )
+
+  const updateGoal = useCallback(
+    (hours: number) => {
+      const additionalHours = Number.isFinite(hours) ? Math.max(0, Math.floor(hours)) : 0
+      if (additionalHours === 0) {
+        return
+      }
+
+      updateSession((current) => ({
+        ...current,
+        dailyGoalHours: current.dailyGoalHours + additionalHours,
+      }))
+    },
+    [updateSession],
+  )
 
   const playAlarmSound = () => {
     const audioContext = new AudioContext()
@@ -176,13 +322,10 @@ export default function Home() {
 
     oscillator.connect(gainNode)
     gainNode.connect(audioContext.destination)
-
-    oscillator.frequency.value = 523.25 // C5
+    oscillator.frequency.value = 523.25
     oscillator.type = "sine"
-
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-
     oscillator.start(audioContext.currentTime)
     oscillator.stop(audioContext.currentTime + 0.5)
 
@@ -191,7 +334,7 @@ export default function Home() {
       const gain2 = audioContext.createGain()
       osc2.connect(gain2)
       gain2.connect(audioContext.destination)
-      osc2.frequency.value = 659.25 // E5
+      osc2.frequency.value = 659.25
       osc2.type = "sine"
       gain2.gain.setValueAtTime(0.3, audioContext.currentTime)
       gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
@@ -208,7 +351,7 @@ export default function Home() {
       setExcessMinutes(excess)
       setIsExcessModalOpen(true)
     } else {
-      addSessionMinutes(timerMinutes)
+      addSessionMinutes(session.timerMinutes)
     }
 
     setSpeedMultiplier(1)
@@ -216,24 +359,23 @@ export default function Home() {
   }
 
   const handleAcceptExcess = () => {
-    addSessionMinutes(timerMinutes + excessMinutes)
+    addSessionMinutes(session.timerMinutes + excessMinutes)
     setIsExcessModalOpen(false)
     setExcessMinutes(0)
   }
 
   const handleRejectExcess = () => {
-    addSessionMinutes(timerMinutes)
+    addSessionMinutes(session.timerMinutes)
     setIsExcessModalOpen(false)
     setExcessMinutes(0)
   }
 
   const toggleDarkMode = useCallback(() => {
-    setIsDark((prev) => {
-      const newValue = !prev
-      localStorage.setItem("darkMode", String(newValue))
-      return newValue
-    })
-  }, [])
+    updateSession((current) => ({
+      ...current,
+      darkMode: !current.darkMode,
+    }))
+  }, [updateSession])
 
   const handleTimerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -245,8 +387,10 @@ export default function Home() {
   }
 
   const handleTimerConfigConfirm = (minutes: number) => {
-    setTimerMinutes(minutes)
-    localStorage.setItem("timerMinutes", String(minutes))
+    updateSession((current) => ({
+      ...current,
+      timerMinutes: Math.max(1, minutes),
+    }))
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
     setTimerStatus("idle")
@@ -262,6 +406,10 @@ export default function Home() {
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        return
+      }
+
       if (e.key === "d" || e.key === "D") {
         toggleDarkMode()
         return
@@ -276,7 +424,7 @@ export default function Home() {
       if (e.key === "ArrowDown") {
         if (timerStatus === "running") {
           e.preventDefault()
-          const totalSeconds = Math.max(1, timerMinutes * 60)
+          const totalSeconds = Math.max(1, session.timerMinutes * 60)
           const fastMultiplier = Math.max(1, Math.ceil(totalSeconds / FAST_FORWARD_SECONDS))
           setSpeedMultiplier(fastMultiplier)
           setIsFastForwarding(true)
@@ -296,11 +444,11 @@ export default function Home() {
         if (isTimerConfigOpen) {
           e.preventDefault()
           const parsed = timerInput ? Number.parseInt(timerInput, 10) : Number.NaN
-          const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : timerMinutes
+          const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : session.timerMinutes
           handleTimerConfigConfirm(minutes)
         } else if (isModalOpen && goalInput) {
           e.preventDefault()
-          const hours = Number.parseInt(goalInput) || 1
+          const hours = Number.parseInt(goalInput, 10) || 1
           updateGoal(hours)
           setIsModalOpen(false)
           setGoalInput("")
@@ -343,29 +491,62 @@ export default function Home() {
         } else if (isModalOpen) {
           setIsModalOpen(false)
           setGoalInput("")
+        } else if (isImageSelected) {
+          setIsImageSelected(false)
         } else if (showSessionStacks) {
           setShowSessionStacks(false)
         }
       }
     },
-    [isModalOpen, isTimerConfigOpen, goalInput, timerInput, timerStatus, timerMinutes, cancelTimer, toggleDarkMode, setSpeedMultiplier, setIsFastForwarding, showSessionStacks],
+    [cancelTimer, goalInput, isImageSelected, isModalOpen, isTimerConfigOpen, session.timerMinutes, showSessionStacks, timerInput, timerStatus, toggleDarkMode, updateGoal],
   )
 
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    if (e.key === "ArrowDown" && !isFastForwarding) {
-      setSpeedMultiplier(1)
-    }
-  }, [isFastForwarding])
+  const handlePaste = useCallback(
+    async (event: ClipboardEvent) => {
+      if (!directoryHandle || !event.clipboardData) {
+        return
+      }
+
+      const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith("image/"))
+      if (!imageItem) {
+        return
+      }
+
+      const file = imageItem.getAsFile()
+      if (!file) {
+        return
+      }
+
+      event.preventDefault()
+
+      const nextTransform = DEFAULT_IMAGE_TRANSFORM
+      const asset = await saveImageToDirectory(directoryHandle, file, nextTransform)
+      replaceImageFile(file, asset, nextTransform)
+      setIsImageSelected(true)
+    },
+    [directoryHandle, replaceImageFile],
+  )
+
+  const handleKeyUp = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" && !isFastForwarding) {
+        setSpeedMultiplier(1)
+      }
+    },
+    [isFastForwarding],
+  )
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyPress)
-    return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [handleKeyPress])
-
-  useEffect(() => {
     window.addEventListener("keyup", handleKeyUp)
-    return () => window.removeEventListener("keyup", handleKeyUp)
-  }, [handleKeyUp])
+    window.addEventListener("paste", handlePaste)
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress)
+      window.removeEventListener("keyup", handleKeyUp)
+      window.removeEventListener("paste", handlePaste)
+    }
+  }, [handleKeyPress, handleKeyUp, handlePaste])
 
   useEffect(() => {
     if (timerStatus !== "running" && speedMultiplier !== 1) {
@@ -379,65 +560,67 @@ export default function Home() {
     }
   }, [timerStatus, isFastForwarding])
 
-  const goalHours = session ? Number(session.daily_goal_hours) : 0
-  const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
-  const accumulatedMinutes = session ? Number(session.accumulated_minutes) : 0
-  const progress = goalMinutes > 0 ? Math.min(1, accumulatedMinutes / goalMinutes) : 0
-  const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - accumulatedMinutes, 0) : 0
-
-  const sessionStacks = useMemo(() => {
-    if (accumulatedMinutes <= 0) {
-      return [] as Array<{ id: string; progress: number; label: string; minutes: number }>
-    }
-
-    const interval = Math.max(1, timerMinutes)
-    const totalMinutes = Math.max(0, accumulatedMinutes)
-    const fullStacks = Math.floor(totalMinutes / interval)
-    const remainder = totalMinutes % interval
-    const stacks: Array<{ id: string; progress: number; label: string; minutes: number }> = []
-
-    for (let index = 0; index < fullStacks; index += 1) {
-      stacks.push({
-        id: `stack-${index}`,
-        progress: 1,
-        label: formatDuration(interval),
-        minutes: interval,
-      })
-    }
-
-    if (remainder > 0) {
-      stacks.push({
-        id: `stack-${stacks.length}`,
-        progress: remainder / interval,
-        label: formatDuration(remainder),
-        minutes: remainder,
-      })
-    }
-
-    return stacks
-  }, [accumulatedMinutes, timerMinutes])
-
   const totalDurationLabel = formatDuration(accumulatedMinutes)
   const overlayBackground = isDark ? "bg-gray-900/95" : "bg-white/95"
   const overlayAccentText = isDark ? "text-white" : "text-gray-900"
 
-
-  console.log("[v0] Render - session:", session, "progress:", progress)
+  if (!isHydrated || !directoryHandle) {
+    return (
+      <FolderGate
+        isDark={isDark}
+        fsSupported={isFsSupported}
+        isConnecting={isConnectingDirectory}
+        onSelect={handleDirectorySelection}
+      />
+    )
+  }
 
   return (
-    <main
-      className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
-    >
+    <main className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-900"}`}>
+      <div className="grid min-h-screen grid-cols-1 gap-6 p-4 md:grid-cols-[220px_minmax(0,1fr)] md:gap-8 md:p-6">
+        <section className="flex flex-col justify-between gap-6 md:sticky md:top-6 md:h-[calc(100vh-3rem)]">
+          <div className={`rounded-[2rem] border p-5 shadow-xl ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"}`}>
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-500">Tiempo</div>
+            <div className="mt-4 text-5xl font-bold">{formatDuration(remainingMinutes)}</div>
+            <div className={`mt-3 text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+              {formatDuration(accumulatedMinutes)} acumulado de {goalHours}h
+            </div>
+            <div className={`mt-6 h-2 overflow-hidden rounded-full ${isDark ? "bg-white/10" : "bg-gray-200"}`}>
+              <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${progress * 100}%` }} />
+            </div>
+            <div className={`mt-3 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+              `Ctrl+V` pega una imagen. `Click` la ajusta. `Espacio` controla el temporizador.
+            </div>
+          </div>
 
-      <div className="h-screen w-full">
-        <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
+          <div className={`rounded-[2rem] border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"}`}>
+            <div className="text-sm font-semibold">Temporizador</div>
+            <div className={`mt-2 text-3xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session.timerMinutes} min</div>
+            <div className={`mt-3 text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+              `Enter` inicia. `ArrowDown` acelera mientras corre. Click en el circulo para cambiar minutos.
+            </div>
+          </div>
+        </section>
+
+        <section className="min-w-0">
+          <PastedImageStage
+            imageUrl={imageUrl}
+            imageTransform={imageTransform}
+            isSelected={isImageSelected}
+            isDark={isDark}
+            onSelect={() => setIsImageSelected(true)}
+            onDeselect={() => setIsImageSelected(false)}
+            onTransformChange={(transform) => setImageTransform(normalizeImageTransform(transform))}
+            remainingMinutes={remainingMinutes}
+          />
+        </section>
       </div>
 
       <TimerCircle
         status={timerStatus}
         onComplete={handleTimerComplete}
         isDark={isDark}
-        timerMinutes={timerMinutes}
+        timerMinutes={session.timerMinutes}
         onTimerClick={handleTimerClick}
         onCancel={cancelTimer}
         speedMultiplier={speedMultiplier}
@@ -459,11 +642,11 @@ export default function Home() {
                     />
                   </div>
                   {index < sessionStacks.length - 1 && (
-                    <span className={`${overlayAccentText} text-4xl font-semibold self-center`}>+</span>
+                    <span className={`${overlayAccentText} self-center text-4xl font-semibold`}>+</span>
                   )}
                 </div>
               ))}
-              <span className={`${overlayAccentText} text-4xl font-semibold self-center`}>=</span>
+              <span className={`${overlayAccentText} self-center text-4xl font-semibold`}>=</span>
               <div className="h-[400px] w-[200px]">
                 <BatteryCylinder
                   progress={progress}
@@ -499,7 +682,7 @@ export default function Home() {
       <TimerConfigModal
         isOpen={isTimerConfigOpen}
         currentInput={timerInput}
-        fallbackMinutes={timerMinutes}
+        fallbackMinutes={session.timerMinutes}
         onConfirm={handleTimerConfigConfirm}
         onClose={() => {
           setIsTimerConfigOpen(false)
@@ -511,7 +694,7 @@ export default function Home() {
       <ExcessTimeModal
         isOpen={isExcessModalOpen}
         excessMinutes={excessMinutes}
-        timerMinutes={timerMinutes}
+        timerMinutes={session.timerMinutes}
         onAccept={handleAcceptExcess}
         onReject={handleRejectExcess}
         isDark={isDark}

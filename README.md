@@ -1,24 +1,25 @@
 # Bateria diaria
 
-Aplicacion Next.js para registrar minutos de trabajo sobre una meta diaria, con persistencia en Neon/Postgres.
+Aplicacion Next.js de productividad que ahora funciona 100% local en navegador Chromium.
 
 ## Funcionalidades actuales
 
-- Cilindro principal con progreso segun `minutos acumulados / meta diaria`.
+- Inicio bloqueado hasta autorizar una carpeta local compatible con File System Access API.
+- Persistencia local de meta diaria, minutos acumulados, duracion del temporizador y modo oscuro.
+- Pegado de imagen con `Ctrl+V`, guardado en la carpeta elegida y restauracion al reabrir.
+- Ajuste leve de imagen con click para seleccionar, arrastre para mover y zoom con rueda o botones.
+- Bloque de tiempo independiente en la esquina superior izquierda, separado del area visual principal.
 - Temporizador central con estados `running`, `paused` e `idle`.
-- Suma de minutos al completar una sesion.
-- Configuracion del temporizador en minutos.
-- Suma incremental de horas a la meta diaria.
+- Modal para sumar horas a la meta diaria.
 - Modal para decidir si el tiempo excedido tambien se agrega al progreso.
-- Modo oscuro persistido en `localStorage`.
 - Vista de desglose de sesiones del dia en pilas visuales.
-- Sincronizacion de la sesion actual con DB via `/api/session`.
 
 ## Atajos de teclado
 
+- `Ctrl+V`: pegar o reemplazar la imagen actual.
 - `Enter`: iniciar temporizador, confirmar meta o confirmar minutos del temporizador segun el contexto.
 - `Espacio`: pausar o reanudar el temporizador cuando no hay modales abiertos.
-- `Escape`: cancelar temporizador, cerrar modales o cerrar la vista de pilas.
+- `Escape`: cancelar temporizador, cerrar modales, salir de la seleccion de imagen o cerrar la vista de pilas.
 - `0-9`: abrir la carga de meta y escribir horas; si esta abierto el modal del temporizador, escribe minutos.
 - `Backspace`: borrar el ultimo digito en el modal activo.
 - `D`: alternar modo oscuro.
@@ -27,7 +28,7 @@ Aplicacion Next.js para registrar minutos de trabajo sobre una meta diaria, con 
 
 ## Persistencia
 
-- `GET /api/session`: trae la sesion actual.
-- `POST /api/session` con `action: "addMinutes"`: suma minutos al dia actual.
-- `POST /api/session` con `action: "updateGoal"`: suma horas a la meta diaria.
-- `lib/db.ts`: si cambia el dia calendario, crea automaticamente nuevos registros diarios manteniendo la meta base.
+- Estado diario y configuracion: `localStorage`.
+- Handle de carpeta autorizada: `IndexedDB`.
+- Imagen pegada y metadata de ajuste: archivos dentro de la carpeta elegida.
+- Cambio de dia: reinicia minutos acumulados y conserva la meta diaria configurada.

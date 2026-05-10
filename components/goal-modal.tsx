@@ -33,7 +33,7 @@ export function GoalModal({ isOpen, currentInput, onConfirm, onClose, isDark, cu
           {currentInput || "0"}h
         </div>
         <p className={subtitleClasses}>
-          Meta actual: <span className="font-semibold">{currentGoalHours}h</span> -> <span className="font-semibold">{projectedTotal}h</span>
+          Meta actual: <span className="font-semibold">{currentGoalHours}h</span> {"->"} <span className="font-semibold">{projectedTotal}h</span>
         </p>
 
         <div className="flex items-center justify-center gap-4 mb-6">
