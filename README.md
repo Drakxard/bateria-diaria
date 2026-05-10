@@ -1,30 +1,33 @@
-# Cilindro de batería app
+# Bateria diaria
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+Aplicacion Next.js para registrar minutos de trabajo sobre una meta diaria, con persistencia en Neon/Postgres.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/drakxards-projects-8a80a33c/v0-cilindro-de-bateria-app)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/projects/ywsxGeDB75E)
+## Funcionalidades actuales
 
-## Overview
+- Cilindro principal con progreso segun `minutos acumulados / meta diaria`.
+- Temporizador central con estados `running`, `paused` e `idle`.
+- Suma de minutos al completar una sesion.
+- Configuracion del temporizador en minutos.
+- Suma incremental de horas a la meta diaria.
+- Modal para decidir si el tiempo excedido tambien se agrega al progreso.
+- Modo oscuro persistido en `localStorage`.
+- Vista de desglose de sesiones del dia en pilas visuales.
+- Sincronizacion de la sesion actual con DB via `/api/session`.
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## Atajos de teclado
 
-## Deployment
+- `Enter`: iniciar temporizador, confirmar meta o confirmar minutos del temporizador segun el contexto.
+- `Espacio`: pausar o reanudar el temporizador cuando no hay modales abiertos.
+- `Escape`: cancelar temporizador, cerrar modales o cerrar la vista de pilas.
+- `0-9`: abrir la carga de meta y escribir horas; si esta abierto el modal del temporizador, escribe minutos.
+- `Backspace`: borrar el ultimo digito en el modal activo.
+- `D`: alternar modo oscuro.
+- `C`: mostrar u ocultar la vista de pilas de sesiones del dia.
+- `ArrowDown`: acelera el temporizador mientras esta corriendo.
 
-Your project is live at:
+## Persistencia
 
-**[https://vercel.com/drakxards-projects-8a80a33c/v0-cilindro-de-bateria-app](https://vercel.com/drakxards-projects-8a80a33c/v0-cilindro-de-bateria-app)**
-
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.app/chat/projects/ywsxGeDB75E](https://v0.app/chat/projects/ywsxGeDB75E)**
-
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+- `GET /api/session`: trae la sesion actual.
+- `POST /api/session` con `action: "addMinutes"`: suma minutos al dia actual.
+- `POST /api/session` con `action: "updateGoal"`: suma horas a la meta diaria.
+- `lib/db.ts`: si cambia el dia calendario, crea automaticamente nuevos registros diarios manteniendo la meta base.

@@ -383,7 +383,6 @@ export default function Home() {
   const goalMinutes = goalHours > 0 ? goalHours * 60 : 0
   const accumulatedMinutes = session ? Number(session.accumulated_minutes) : 0
   const progress = goalMinutes > 0 ? Math.min(1, accumulatedMinutes / goalMinutes) : 0
-  const accumulatedHours = Math.floor(accumulatedMinutes / 60)
   const remainingMinutes = goalMinutes > 0 ? Math.max(goalMinutes - accumulatedMinutes, 0) : 0
 
   const sessionStacks = useMemo(() => {
@@ -423,18 +422,12 @@ export default function Home() {
   const overlayAccentText = isDark ? "text-white" : "text-gray-900"
 
 
-  console.log("[v0] Render - session:", session, "accumulatedHours:", accumulatedHours, "progress:", progress)
+  console.log("[v0] Render - session:", session, "progress:", progress)
 
   return (
     <main
       className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
     >
-      <div
-        className="fixed top-6 left-6 z-10 select-none"
-      >
-        <div className={`text-6xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session?.day_index || 1}</div>
-        <div className={`text-sm text-center mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>día</div>
-      </div>
 
       <div className="h-screen w-full">
         <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
