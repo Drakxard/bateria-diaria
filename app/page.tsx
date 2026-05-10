@@ -8,7 +8,6 @@ import { TimerCircle } from "@/components/timer-circle"
 import { TimerConfigModal } from "@/components/timer-config-modal"
 import { ExcessTimeModal } from "@/components/excess-time-modal"
 import { BatteryCylinder } from "@/components/battery-cylinder"
-import { PastedImageStage } from "@/components/pasted-image-stage"
 import {
   DEFAULT_IMAGE_TRANSFORM,
   DEFAULT_SESSION_STATE,
@@ -145,9 +144,9 @@ export default function Home() {
         setIsFsSupported(typeof window.showDirectoryPicker === "function")
       }
 
-      if (typeof window.showDirectoryPicker !== "function") {
-        if (!cancelled) {
-          setIsHydrated(true)
+  if (typeof window.showDirectoryPicker !== "function") {
+    if (!cancelled) {
+      setIsHydrated(true)
         }
         return
       }
@@ -381,6 +380,7 @@ export default function Home() {
     e.stopPropagation()
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
+    setIsImageSelected(false)
     setTimerStatus((prev) => (prev === "idle" ? "idle" : "paused"))
     setIsTimerConfigOpen(true)
     setTimerInput("")
@@ -393,6 +393,7 @@ export default function Home() {
     }))
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
+    setIsImageSelected(false)
     setTimerStatus("idle")
     setIsTimerConfigOpen(false)
     setTimerInput("")
@@ -401,6 +402,7 @@ export default function Home() {
   const cancelTimer = useCallback(() => {
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
+    setIsImageSelected(false)
     setTimerStatus("idle")
   }, [])
 
@@ -503,7 +505,7 @@ export default function Home() {
 
   const handlePaste = useCallback(
     async (event: ClipboardEvent) => {
-      if (!directoryHandle || !event.clipboardData) {
+      if (!isTimerConfigOpen || !directoryHandle || !event.clipboardData) {
         return
       }
 
@@ -524,7 +526,7 @@ export default function Home() {
       replaceImageFile(file, asset, nextTransform)
       setIsImageSelected(true)
     },
-    [directoryHandle, replaceImageFile],
+    [directoryHandle, isTimerConfigOpen, replaceImageFile],
   )
 
   const handleKeyUp = useCallback(
@@ -576,44 +578,11 @@ export default function Home() {
   }
 
   return (
-    <main className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-900"}`}>
-      <div className="grid min-h-screen grid-cols-1 gap-6 p-4 md:grid-cols-[220px_minmax(0,1fr)] md:gap-8 md:p-6">
-        <section className="flex flex-col justify-between gap-6 md:sticky md:top-6 md:h-[calc(100vh-3rem)]">
-          <div className={`rounded-[2rem] border p-5 shadow-xl ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"}`}>
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-500">Tiempo</div>
-            <div className="mt-4 text-5xl font-bold">{formatDuration(remainingMinutes)}</div>
-            <div className={`mt-3 text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
-              {formatDuration(accumulatedMinutes)} acumulado de {goalHours}h
-            </div>
-            <div className={`mt-6 h-2 overflow-hidden rounded-full ${isDark ? "bg-white/10" : "bg-gray-200"}`}>
-              <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${progress * 100}%` }} />
-            </div>
-            <div className={`mt-3 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              `Ctrl+V` pega una imagen. `Click` la ajusta. `Espacio` controla el temporizador.
-            </div>
-          </div>
-
-          <div className={`rounded-[2rem] border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"}`}>
-            <div className="text-sm font-semibold">Temporizador</div>
-            <div className={`mt-2 text-3xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{session.timerMinutes} min</div>
-            <div className={`mt-3 text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              `Enter` inicia. `ArrowDown` acelera mientras corre. Click en el circulo para cambiar minutos.
-            </div>
-          </div>
-        </section>
-
-        <section className="min-w-0">
-          <PastedImageStage
-            imageUrl={imageUrl}
-            imageTransform={imageTransform}
-            isSelected={isImageSelected}
-            isDark={isDark}
-            onSelect={() => setIsImageSelected(true)}
-            onDeselect={() => setIsImageSelected(false)}
-            onTransformChange={(transform) => setImageTransform(normalizeImageTransform(transform))}
-            remainingMinutes={remainingMinutes}
-          />
-        </section>
+    <main
+      className={`min-h-screen transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-gray-50"}`}
+    >
+      <div className="h-screen w-full">
+        <BatteryCylinder progress={progress} isDark={isDark} remainingMinutes={remainingMinutes} />
       </div>
 
       <TimerCircle
@@ -687,8 +656,15 @@ export default function Home() {
         onClose={() => {
           setIsTimerConfigOpen(false)
           setTimerInput("")
+          setIsImageSelected(false)
         }}
         isDark={isDark}
+        imageUrl={imageUrl}
+        imageTransform={imageTransform}
+        isImageSelected={isImageSelected}
+        onImageSelect={() => setIsImageSelected(true)}
+        onImageDeselect={() => setIsImageSelected(false)}
+        onImageTransformChange={(transform) => setImageTransform(normalizeImageTransform(transform))}
       />
 
       <ExcessTimeModal

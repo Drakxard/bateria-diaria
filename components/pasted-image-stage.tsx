@@ -14,6 +14,9 @@ interface PastedImageStageProps {
   onDeselect: () => void
   onTransformChange: (transform: ImageTransformState) => void
   remainingMinutes: number
+  emptyTitle?: string
+  emptySubtitle?: string
+  showFallbackBattery?: boolean
 }
 
 const SCALE_STEP = 0.05
@@ -27,6 +30,9 @@ export function PastedImageStage({
   onDeselect,
   onTransformChange,
   remainingMinutes,
+  emptyTitle = "Pega una imagen con Ctrl+V",
+  emptySubtitle = "Se guardara en la carpeta elegida y podras ajustarla con click.",
+  showFallbackBattery = true,
 }: PastedImageStageProps) {
   const [isDragging, setIsDragging] = useState(false)
   const dragOriginRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
@@ -67,7 +73,12 @@ export function PastedImageStage({
     }
 
     event.stopPropagation()
-    onSelect()
+
+    if (!isSelected) {
+      onSelect()
+      return
+    }
+
     dragOriginRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -177,13 +188,15 @@ export function PastedImageStage({
         </>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 px-6 text-center">
-          <div className="h-[360px] w-[180px] max-w-full">
-            <BatteryCylinder progress={0} isDark={isDark} remainingMinutes={remainingMinutes} labelTopClass="top-[6%]" />
-          </div>
+          {showFallbackBattery && (
+            <div className="h-[360px] w-[180px] max-w-full">
+              <BatteryCylinder progress={0} isDark={isDark} remainingMinutes={remainingMinutes} labelTopClass="top-[6%]" />
+            </div>
+          )}
           <div className={isDark ? "text-gray-200" : "text-gray-700"}>
-            <div className="text-2xl font-semibold">Pega una imagen con Ctrl+V</div>
+            <div className="text-2xl font-semibold">{emptyTitle}</div>
             <div className={`mt-2 text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              Se guardara en la carpeta elegida y podras ajustarla con click.
+              {emptySubtitle}
             </div>
           </div>
         </div>
