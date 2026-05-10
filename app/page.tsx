@@ -144,9 +144,9 @@ export default function Home() {
         setIsFsSupported(typeof window.showDirectoryPicker === "function")
       }
 
-  if (typeof window.showDirectoryPicker !== "function") {
-    if (!cancelled) {
-      setIsHydrated(true)
+      if (typeof window.showDirectoryPicker !== "function") {
+        if (!cancelled) {
+          setIsHydrated(true)
         }
         return
       }
@@ -380,7 +380,6 @@ export default function Home() {
     e.stopPropagation()
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
-    setIsImageSelected(false)
     setTimerStatus((prev) => (prev === "idle" ? "idle" : "paused"))
     setIsTimerConfigOpen(true)
     setTimerInput("")
@@ -393,8 +392,6 @@ export default function Home() {
     }))
     setSpeedMultiplier(1)
     setIsFastForwarding(false)
-    setIsImageSelected(false)
-    setTimerStatus("idle")
     setIsTimerConfigOpen(false)
     setTimerInput("")
   }
@@ -485,16 +482,16 @@ export default function Home() {
       }
 
       if (e.key === "Escape") {
-        if (timerStatus !== "idle") {
-          cancelTimer()
-        } else if (isTimerConfigOpen) {
+        if (isTimerConfigOpen) {
           setIsTimerConfigOpen(false)
           setTimerInput("")
+        } else if (isImageSelected) {
+          setIsImageSelected(false)
+        } else if (timerStatus !== "idle") {
+          cancelTimer()
         } else if (isModalOpen) {
           setIsModalOpen(false)
           setGoalInput("")
-        } else if (isImageSelected) {
-          setIsImageSelected(false)
         } else if (showSessionStacks) {
           setShowSessionStacks(false)
         }
@@ -505,7 +502,7 @@ export default function Home() {
 
   const handlePaste = useCallback(
     async (event: ClipboardEvent) => {
-      if (!isTimerConfigOpen || !directoryHandle || !event.clipboardData) {
+      if (timerStatus === "idle" || !directoryHandle || !event.clipboardData) {
         return
       }
 
@@ -524,9 +521,9 @@ export default function Home() {
       const nextTransform = DEFAULT_IMAGE_TRANSFORM
       const asset = await saveImageToDirectory(directoryHandle, file, nextTransform)
       replaceImageFile(file, asset, nextTransform)
-      setIsImageSelected(true)
+      setIsImageSelected(false)
     },
-    [directoryHandle, isTimerConfigOpen, replaceImageFile],
+    [directoryHandle, replaceImageFile, timerStatus],
   )
 
   const handleKeyUp = useCallback(
@@ -593,6 +590,12 @@ export default function Home() {
         onTimerClick={handleTimerClick}
         onCancel={cancelTimer}
         speedMultiplier={speedMultiplier}
+        imageUrl={imageUrl}
+        imageTransform={imageTransform}
+        isImageSelected={isImageSelected}
+        onImageSelect={() => setIsImageSelected(true)}
+        onImageDeselect={() => setIsImageSelected(false)}
+        onImageTransformChange={(transform) => setImageTransform(normalizeImageTransform(transform))}
       />
 
       {showSessionStacks && (
@@ -656,15 +659,8 @@ export default function Home() {
         onClose={() => {
           setIsTimerConfigOpen(false)
           setTimerInput("")
-          setIsImageSelected(false)
         }}
         isDark={isDark}
-        imageUrl={imageUrl}
-        imageTransform={imageTransform}
-        isImageSelected={isImageSelected}
-        onImageSelect={() => setIsImageSelected(true)}
-        onImageDeselect={() => setIsImageSelected(false)}
-        onImageTransformChange={(transform) => setImageTransform(normalizeImageTransform(transform))}
       />
 
       <ExcessTimeModal

@@ -17,6 +17,8 @@ interface PastedImageStageProps {
   emptyTitle?: string
   emptySubtitle?: string
   showFallbackBattery?: boolean
+  variant?: "default" | "timer-overlay"
+  className?: string
 }
 
 const SCALE_STEP = 0.05
@@ -33,9 +35,12 @@ export function PastedImageStage({
   emptyTitle = "Pega una imagen con Ctrl+V",
   emptySubtitle = "Se guardara en la carpeta elegida y podras ajustarla con click.",
   showFallbackBattery = true,
+  variant = "default",
+  className = "",
 }: PastedImageStageProps) {
   const [isDragging, setIsDragging] = useState(false)
   const dragOriginRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
+  const isTimerOverlay = variant === "timer-overlay"
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -106,15 +111,17 @@ export function PastedImageStage({
 
   return (
     <div
-      className={`relative min-h-[55vh] overflow-hidden rounded-[2rem] border transition-colors md:min-h-[calc(100vh-3rem)] ${
-        isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white/70"
-      }`}
+      className={`relative overflow-hidden transition-colors ${
+        isTimerOverlay
+          ? `h-full w-full rounded-[2rem] ${isDark ? "border border-white/10 bg-white/4" : "border border-gray-200 bg-white/78"}`
+          : `min-h-[55vh] rounded-[2rem] border md:min-h-[calc(100vh-3rem)] ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white/70"}`
+      } ${className}`}
       onClick={onDeselect}
     >
       {imageUrl ? (
         <>
           <div
-            className={`absolute inset-0 transition ${
+            className={`absolute inset-0 flex items-center justify-center transition ${
               isSelected ? "cursor-grab" : "cursor-pointer"
             } ${isDragging ? "cursor-grabbing" : ""}`}
             onClick={(event) => {
@@ -127,7 +134,7 @@ export function PastedImageStage({
             <img
               src={imageUrl}
               alt="Referencia pegada"
-              className="h-full w-full select-none object-contain"
+              className="max-h-full max-w-full select-none object-contain"
               draggable={false}
               style={{
                 transform: `translate(${imageTransform.offsetX}px, ${imageTransform.offsetY}px) scale(${imageTransform.scale})`,
@@ -137,52 +144,83 @@ export function PastedImageStage({
           </div>
 
           {isSelected && (
-            <div className="pointer-events-none absolute inset-5 rounded-[1.5rem] border-2 border-dashed border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.12)]">
-              <div className="pointer-events-auto absolute right-4 top-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    updateScale(-SCALE_STEP)
-                  }}
-                  className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                    isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
-                  }`}
-                >
-                  -
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onTransformChange({ scale: 1, offsetX: 0, offsetY: 0 })
-                  }}
-                  className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                    isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
-                  }`}
-                >
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    updateScale(SCALE_STEP)
-                  }}
-                  className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                    isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
-                  }`}
-                >
-                  +
-                </button>
-              </div>
-              <div
-                className={`absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium ${
-                  isDark ? "bg-gray-900/85 text-gray-100" : "bg-white/90 text-gray-700"
-                }`}
-              >
-                Arrastra para mover. Rueda o botones para escala.
-              </div>
+            <div className={`pointer-events-none absolute ${isTimerOverlay ? "inset-4" : "inset-5"} rounded-[1.5rem] border-2 border-dashed border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.12)]`}>
+              {isTimerOverlay ? (
+                <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      updateScale(SCALE_STEP)
+                    }}
+                    className={`h-10 w-10 rounded-full text-lg font-semibold ${
+                      isDark ? "bg-gray-900/88 text-white" : "bg-white/92 text-gray-900"
+                    }`}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      updateScale(-SCALE_STEP)
+                    }}
+                    className={`h-10 w-10 rounded-full text-lg font-semibold ${
+                      isDark ? "bg-gray-900/88 text-white" : "bg-white/92 text-gray-900"
+                    }`}
+                  >
+                    -
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="pointer-events-auto absolute right-4 top-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        updateScale(-SCALE_STEP)
+                      }}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                        isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
+                      }`}
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onTransformChange({ scale: 1, offsetX: 0, offsetY: 0 })
+                      }}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                        isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
+                      }`}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        updateScale(SCALE_STEP)
+                      }}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                        isDark ? "bg-gray-900/85 text-white" : "bg-white/90 text-gray-900"
+                      }`}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div
+                    className={`absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium ${
+                      isDark ? "bg-gray-900/85 text-gray-100" : "bg-white/90 text-gray-700"
+                    }`}
+                  >
+                    Arrastra para mover. Rueda o botones para escala.
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
