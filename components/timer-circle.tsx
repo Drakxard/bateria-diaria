@@ -231,9 +231,9 @@ export function TimerCircle({
       className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="absolute left-6 top-6 z-20 md:left-8 md:top-8">{timerCircle}</div>
+      <div className="absolute left-6 top-6 z-20 md:left-10 md:top-10">{timerCircle}</div>
 
-      <div className="absolute bottom-4 left-4 right-4 top-[244px] z-0 md:bottom-6 md:left-[244px] md:right-6 md:top-6">
+      <div className="absolute bottom-4 left-4 right-4 top-[244px] z-0 md:bottom-10 md:left-[300px] md:right-10 md:top-10">
         <PastedImageStage
           imageUrl={imageUrl}
           imageTransform={imageTransform}
