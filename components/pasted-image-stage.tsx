@@ -113,7 +113,7 @@ export function PastedImageStage({
     <div
       className={`relative overflow-hidden transition-colors ${
         isTimerOverlay
-          ? `h-full w-full rounded-[2rem] ${isDark ? "border border-white/10 bg-white/4" : "border border-gray-200 bg-white/78"}`
+          ? "h-full w-full"
           : `min-h-[55vh] rounded-[2rem] border md:min-h-[calc(100vh-3rem)] ${isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-white/70"}`
       } ${className}`}
       onClick={onDeselect}
@@ -144,32 +144,32 @@ export function PastedImageStage({
           </div>
 
           {isSelected && (
-            <div className={`pointer-events-none absolute ${isTimerOverlay ? "inset-4" : "inset-5"} rounded-[1.5rem] border-2 border-dashed border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.12)]`}>
+            <div className={`pointer-events-none absolute ${isTimerOverlay ? "inset-6" : "inset-5"} rounded-[1.5rem] border-2 border-dashed border-emerald-400/90 ${isTimerOverlay ? "" : "shadow-[0_0_0_9999px_rgba(0,0,0,0.12)]"}`}>
               {isTimerOverlay ? (
-                <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      updateScale(SCALE_STEP)
-                    }}
-                    className={`h-10 w-10 rounded-full text-lg font-semibold ${
-                      isDark ? "bg-gray-900/88 text-white" : "bg-white/92 text-gray-900"
-                    }`}
-                  >
-                    +
-                  </button>
+                <div className="pointer-events-auto absolute bottom-4 right-4 flex items-center gap-2 rounded-full bg-black/35 p-1 backdrop-blur-sm">
                   <button
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation()
                       updateScale(-SCALE_STEP)
                     }}
-                    className={`h-10 w-10 rounded-full text-lg font-semibold ${
-                      isDark ? "bg-gray-900/88 text-white" : "bg-white/92 text-gray-900"
+                    className={`h-9 w-9 rounded-full text-lg font-semibold leading-none ${
+                      isDark ? "bg-gray-900/90 text-white" : "bg-white/95 text-gray-900"
                     }`}
                   >
                     -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      updateScale(SCALE_STEP)
+                    }}
+                    className={`h-9 w-9 rounded-full text-lg font-semibold leading-none ${
+                      isDark ? "bg-gray-900/90 text-white" : "bg-white/95 text-gray-900"
+                    }`}
+                  >
+                    +
                   </button>
                 </div>
               ) : (

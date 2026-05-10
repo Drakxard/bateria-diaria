@@ -167,6 +167,10 @@ export function TimerCircle({
     }
   }, [])
 
+  const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100)
+  const circumference = 2 * Math.PI * 45
+  const strokeDashoffset = circumference - (progress / 100) * circumference
+
   const remainingSeconds = Math.max(0, Math.ceil(totalSeconds - elapsedSeconds))
   const minutes = Math.floor(remainingSeconds / 60)
   const seconds = remainingSeconds % 60
@@ -182,11 +186,11 @@ export function TimerCircle({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="relative h-full w-full">
-        <div className="absolute left-4 right-4 top-4 bottom-4 md:left-6 md:right-6 md:top-6 md:bottom-6">
+      {imageUrl && (
+        <div className="absolute inset-0 z-0">
           <PastedImageStage
             imageUrl={imageUrl}
             imageTransform={imageTransform}
@@ -196,34 +200,35 @@ export function TimerCircle({
             onDeselect={onImageDeselect}
             onTransformChange={onImageTransformChange}
             remainingMinutes={timerMinutes}
-            emptyTitle="Pega una imagen con Ctrl+V"
-            emptySubtitle="La imagen se carga en este overlay. Tocala para ajustar."
             showFallbackBattery={false}
             variant="timer-overlay"
-            className="pt-24 md:pt-6 md:pl-[240px]"
           />
         </div>
+      )}
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onTimerClick(e)
-          }}
-          className={`absolute left-6 top-6 z-20 min-w-[150px] rounded-[1.5rem] border px-5 py-4 text-left shadow-xl transition ${
-            isDark ? "border-white/10 bg-gray-900/88 text-white" : "border-gray-200 bg-white/92 text-gray-900"
-          }`}
-        >
-          <div className={`text-[11px] font-semibold uppercase tracking-[0.24em] ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-            Temporizador
-          </div>
-          <div className="mt-2 text-4xl font-bold">
+      <div className="relative z-10" onClick={(e) => {
+        e.stopPropagation()
+        onTimerClick(e)
+      }}>
+        <svg width="200" height="200" className="transform -rotate-90">
+          <circle cx="100" cy="100" r="45" stroke={isDark ? "#374151" : "#e5e7eb"} strokeWidth="8" fill="none" />
+          <circle
+            cx="100"
+            cy="100"
+            r="45"
+            stroke="#22c55e"
+            strokeWidth="8"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            className="transition-all duration-1000"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className={`text-4xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
             {minutes}:{seconds.toString().padStart(2, "0")}
-          </div>
-          <div className={`mt-2 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Click para cambiar minutos</div>
-        </button>
-        <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/45 px-4 py-2 text-sm font-medium text-white">
-          {imageUrl ? "Ctrl+V reemplaza la imagen" : "Ctrl+V pega una imagen"}
+          </span>
         </div>
       </div>
     </div>
