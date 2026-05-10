@@ -182,54 +182,70 @@ export function TimerCircle({
     }
   }
 
+  const timerCircle = (
+    <div
+      className="relative"
+      onClick={(e) => {
+        e.stopPropagation()
+        onTimerClick(e)
+      }}
+    >
+      <svg width="200" height="200" className="transform -rotate-90">
+        <circle cx="100" cy="100" r="45" stroke={isDark ? "#374151" : "#e5e7eb"} strokeWidth="8" fill="none" />
+        <circle
+          cx="100"
+          cy="100"
+          r="45"
+          stroke="#22c55e"
+          strokeWidth="8"
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className="transition-all duration-1000"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className={`text-4xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+          {minutes}:{seconds.toString().padStart(2, "0")}
+        </span>
+      </div>
+    </div>
+  )
+
   if (status === "idle" && elapsedSeconds === 0) return null
+
+  if (!imageUrl) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+        onClick={handleBackdropClick}
+      >
+        {timerCircle}
+      </div>
+    )
+  }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+      className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      {imageUrl && (
-        <div className="absolute inset-0 z-0">
-          <PastedImageStage
-            imageUrl={imageUrl}
-            imageTransform={imageTransform}
-            isSelected={isImageSelected}
-            isDark={isDark}
-            onSelect={onImageSelect}
-            onDeselect={onImageDeselect}
-            onTransformChange={onImageTransformChange}
-            remainingMinutes={timerMinutes}
-            showFallbackBattery={false}
-            variant="timer-overlay"
-          />
-        </div>
-      )}
+      <div className="absolute left-6 top-6 z-20 md:left-8 md:top-8">{timerCircle}</div>
 
-      <div className="relative z-10" onClick={(e) => {
-        e.stopPropagation()
-        onTimerClick(e)
-      }}>
-        <svg width="200" height="200" className="transform -rotate-90">
-          <circle cx="100" cy="100" r="45" stroke={isDark ? "#374151" : "#e5e7eb"} strokeWidth="8" fill="none" />
-          <circle
-            cx="100"
-            cy="100"
-            r="45"
-            stroke="#22c55e"
-            strokeWidth="8"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            className="transition-all duration-1000"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className={`text-4xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
-            {minutes}:{seconds.toString().padStart(2, "0")}
-          </span>
-        </div>
+      <div className="absolute bottom-4 left-4 right-4 top-[244px] z-0 md:bottom-6 md:left-[244px] md:right-6 md:top-6">
+        <PastedImageStage
+          imageUrl={imageUrl}
+          imageTransform={imageTransform}
+          isSelected={isImageSelected}
+          isDark={isDark}
+          onSelect={onImageSelect}
+          onDeselect={onImageDeselect}
+          onTransformChange={onImageTransformChange}
+          remainingMinutes={timerMinutes}
+          showFallbackBattery={false}
+          variant="timer-overlay"
+        />
       </div>
     </div>
   )
