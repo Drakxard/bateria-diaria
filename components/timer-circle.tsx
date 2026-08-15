@@ -8,9 +8,10 @@ interface TimerCircleProps {
   status: TimerStatus
   timerMinutes: number
   onComplete: () => void
+  onClick: () => void
 }
 
-export function TimerCircle({ status, timerMinutes, onComplete }: TimerCircleProps) {
+export function TimerCircle({ status, timerMinutes, onComplete, onClick }: TimerCircleProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const elapsedRef = useRef(0)
   const lastTickRef = useRef<number | null>(null)
@@ -54,7 +55,12 @@ export function TimerCircle({ status, timerMinutes, onComplete }: TimerCirclePro
   const seconds = displaySeconds % 60
 
   return (
-    <div className={`relative h-[200px] w-[200px] transition-opacity ${completed ? "opacity-55" : ""}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Editar temporizador de ${timerMinutes} minutos`}
+      className={`relative h-[200px] w-[200px] cursor-pointer transition-opacity hover:opacity-80 ${completed ? "opacity-55" : ""}`}
+    >
       <svg width="200" height="200" className="-rotate-90">
         <circle cx="100" cy="100" r="45" stroke="#e5e7eb" strokeWidth="8" fill="none" />
         <circle
@@ -81,6 +87,6 @@ export function TimerCircle({ status, timerMinutes, onComplete }: TimerCirclePro
           Completado
         </span>
       )}
-    </div>
+    </button>
   )
 }

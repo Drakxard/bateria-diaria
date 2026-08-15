@@ -9,13 +9,15 @@ interface TimerItem {
   id: number
   minutes: number
   status: TimerStatus
+  revision: number
 }
 
 export default function Home() {
   const [timers, setTimers] = useState<TimerItem[]>([
-    { id: 1, minutes: 40, status: "running" },
+    { id: 1, minutes: 40, status: "running", revision: 0 },
   ])
   const [minuteInput, setMinuteInput] = useState("")
+  const [editingTimerId, setEditingTimerId] = useState<number | null>(null)
   const nextId = useRef(2)
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function Home() {
 
       if (event.key === "Escape") {
         setMinuteInput("")
+        setEditingTimerId(null)
         return
       }
 
@@ -45,10 +48,29 @@ export default function Home() {
           const minutes = Number.parseInt(current, 10)
 
           if (Number.isFinite(minutes) && minutes > 0) {
+            if (editingTimerId !== null) {
+              setTimers((items) =>
+                items.map((item) =>
+                  item.id === editingTimerId
+                    ? {
+                        ...item,
+                        minutes,
+                        status: "running",
+                        revision: item.revision + 1,
+                      }
+                    : item.status === "running"
+                      ? { ...item, status: "paused" }
+                      : item,
+                ),
+              )
+              setEditingTimerId(null)
+              return ""
+            }
+
             const id = nextId.current++
             setTimers((items) => {
               if (items.some((item) => item.status !== "completed")) return items
-              return [...items, { id, minutes, status: "running" }]
+              return [...items, { id, minutes, status: "running", revision: 0 }]
             })
           }
 
@@ -74,7 +96,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [editingTimerId])
 
   const completeTimer = (id: number) => {
     setTimers((items) =>
@@ -87,17 +109,21 @@ export default function Home() {
       <div className="flex min-w-max gap-0 px-10 pt-10">
         {timers.map((timer) => (
           <TimerCircle
-            key={timer.id}
+            key={`${timer.id}-${timer.revision}`}
             status={timer.status}
             timerMinutes={timer.minutes}
             onComplete={() => completeTimer(timer.id)}
+            onClick={() => {
+              setEditingTimerId(timer.id)
+              setMinuteInput("")
+            }}
           />
         ))}
       </div>
 
-      {minuteInput && (
+      {(minuteInput || editingTimerId !== null) && (
         <div className="fixed right-6 top-6 rounded-full bg-gray-900/75 px-4 py-2 text-sm font-semibold text-white">
-          Nuevo temporizador: {minuteInput} min · Enter
+          {editingTimerId !== null ? "Editar" : "Nuevo temporizador"}: {minuteInput || "—"} min · Enter
         </div>
       )}
     </main>
