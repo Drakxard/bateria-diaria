@@ -7,19 +7,29 @@ type TimerStatus = "running" | "paused" | "completed"
 interface TimerCircleProps {
   status: TimerStatus
   timerMinutes: number
+  initialElapsedSeconds?: number
   onComplete: () => void
+  onElapsedChange?: (elapsedSeconds: number) => void
   onClick: () => void
 }
 
-export function TimerCircle({ status, timerMinutes, onComplete, onClick }: TimerCircleProps) {
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const elapsedRef = useRef(0)
+export function TimerCircle({ status, timerMinutes, initialElapsedSeconds = 0, onComplete, onElapsedChange, onClick }: TimerCircleProps) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(initialElapsedSeconds)
+  const elapsedRef = useRef(initialElapsedSeconds)
+  const reportedSecondRef = useRef(Math.floor(initialElapsedSeconds))
   const lastTickRef = useRef<number | null>(null)
+  const onCompleteRef = useRef(onComplete)
+  const onElapsedChangeRef = useRef(onElapsedChange)
   const totalSeconds = Math.max(1, timerMinutes * 60)
 
   useEffect(() => {
     elapsedRef.current = elapsedSeconds
   }, [elapsedSeconds])
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+    onElapsedChangeRef.current = onElapsedChange
+  }, [onComplete, onElapsedChange])
 
   useEffect(() => {
     if (status !== "running") {
@@ -37,12 +47,18 @@ export function TimerCircle({ status, timerMinutes, onComplete, onClick }: Timer
       elapsedRef.current = nextElapsed
       setElapsedSeconds(nextElapsed)
 
-      if (nextElapsed >= totalSeconds) onComplete()
+      const wholeSecond = Math.floor(nextElapsed)
+      if (wholeSecond !== reportedSecondRef.current) {
+        reportedSecondRef.current = wholeSecond
+        onElapsedChangeRef.current?.(nextElapsed)
+      }
+
+      if (nextElapsed >= totalSeconds) onCompleteRef.current()
     }
 
     const intervalId = window.setInterval(tick, 250)
     return () => window.clearInterval(intervalId)
-  }, [onComplete, status, totalSeconds])
+  }, [status, totalSeconds])
 
   const completed = status === "completed"
   const progress = completed ? 100 : Math.min(100, (elapsedSeconds / totalSeconds) * 100)

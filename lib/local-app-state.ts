@@ -35,6 +35,7 @@ const DIRECTORY_STORE_NAME = "handles"
 const DIRECTORY_HANDLE_KEY = "workspace-directory"
 const IMAGE_FILE_NAME = "bateria-diaria-image.bin"
 const IMAGE_META_FILE_NAME = "bateria-diaria-image.json"
+const APP_STATE_FILE_NAME = "bateria-diaria.json"
 
 export const DEFAULT_IMAGE_TRANSFORM: ImageTransformState = {
   scale: 1,
@@ -159,6 +160,14 @@ export async function canReuseDirectoryHandle(handle: FileSystemDirectoryHandle)
 export async function requestDirectoryAccess(handle: FileSystemDirectoryHandle) {
   const permission = await handle.requestPermission({ mode: "readwrite" })
   return permission === "granted"
+}
+
+export async function saveAppState<T>(handle: FileSystemDirectoryHandle, state: T) {
+  await writeJsonFile(handle, APP_STATE_FILE_NAME, state)
+}
+
+export async function loadAppState<T>(handle: FileSystemDirectoryHandle) {
+  return readJsonFile<T>(handle, APP_STATE_FILE_NAME)
 }
 
 async function writeJsonFile(handle: FileSystemDirectoryHandle, name: string, value: unknown) {
