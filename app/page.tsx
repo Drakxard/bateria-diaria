@@ -240,12 +240,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#c7c8ca]">
-      {storageStatus !== "ready" && (
+      {storageStatus !== "ready" && storageStatus !== "checking" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#c7c8ca] p-6">
           <div className="max-w-md rounded-2xl bg-white p-7 text-center shadow-xl">
-            {storageStatus === "checking" ? (
-              <p className="text-lg font-medium text-neutral-700">Verificando acceso a tus datos…</p>
-            ) : storageStatus === "unsupported" ? (
+            {storageStatus === "unsupported" ? (
               <p className="text-neutral-700">Este navegador no permite guardar datos en una carpeta local. Abrí la aplicación con Chrome o Edge.</p>
             ) : (
               <>
