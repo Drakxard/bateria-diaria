@@ -102,11 +102,29 @@ export default function Home() {
     setTimers((items) =>
       items.map((item) => (item.id === id ? { ...item, status: "completed" } : item)),
     )
+
+    try {
+      const audioContext = new AudioContext()
+      const oscillator = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+
+      oscillator.connect(gain)
+      gain.connect(audioContext.destination)
+      oscillator.frequency.value = 620
+      oscillator.type = "sine"
+      gain.gain.setValueAtTime(0.08, audioContext.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.35)
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 0.35)
+      oscillator.addEventListener("ended", () => void audioContext.close(), { once: true })
+    } catch {
+      // Algunos navegadores pueden bloquear audio sin interacción previa.
+    }
   }
 
   return (
-    <main className="min-h-screen overflow-x-auto bg-[#c7c8ca]">
-      <div className="flex min-w-max gap-0 px-10 pt-10">
+    <main className="min-h-screen bg-[#c7c8ca]">
+      <div className="flex w-full flex-wrap content-start px-10 pt-10">
         {timers.map((timer) => (
           <TimerCircle
             key={`${timer.id}-${timer.revision}`}
@@ -122,10 +140,14 @@ export default function Home() {
       </div>
 
       {(minuteInput || editingTimerId !== null) && (
-        <div className="fixed right-6 top-6 rounded-full bg-gray-900/75 px-4 py-2 text-sm font-semibold text-white">
-          {editingTimerId !== null ? "Editar" : "Nuevo temporizador"}: {minuteInput || "—"} min · Enter
+        <div
+          aria-live="polite"
+          className="fixed left-1/2 top-6 -translate-x-1/2 text-2xl font-bold tabular-nums text-green-600"
+        >
+          {minuteInput || "0"}
         </div>
       )}
+
     </main>
   )
 }

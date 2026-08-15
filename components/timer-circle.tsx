@@ -58,8 +58,9 @@ export function TimerCircle({ status, timerMinutes, onComplete, onClick }: Timer
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Editar temporizador de ${timerMinutes} minutos`}
-      className={`relative h-[200px] w-[200px] cursor-pointer transition-opacity hover:opacity-80 ${completed ? "opacity-55" : ""}`}
+      disabled={completed}
+      aria-label={completed ? `Temporizador completado de ${timerMinutes} minutos` : `Editar temporizador de ${timerMinutes} minutos`}
+      className={`relative h-[200px] w-[200px] transition-opacity ${completed ? "cursor-default opacity-55" : "cursor-pointer hover:opacity-80"}`}
     >
       <svg width="200" height="200" className="-rotate-90">
         <circle cx="100" cy="100" r="45" stroke="#e5e7eb" strokeWidth="8" fill="none" />
